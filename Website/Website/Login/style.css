@@ -490,6 +490,12 @@
       text-align: left;
     }
 
+    .name-fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
     .field label {
       display: block;
       margin-bottom: clamp(5px, 0.6vh, 7px);
@@ -815,6 +821,13 @@
         font-size: 0.9rem;
       }
 
+    }
+
+    @media (max-width: 520px) {
+      .name-fields {
+        grid-template-columns: 1fr;
+        gap: 0;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {

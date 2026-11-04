@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#020b09" />
   <title>Hope, Inc. ERP ? Dashboard</title>
+  <script>
+    window.spotibaiSupabaseReady = new Promise((resolve, reject) => {
+      window.addEventListener('spotibai:supabase-ready', event => resolve(event.detail), { once: true });
+      window.addEventListener('spotibai:supabase-error', event => reject(event.detail), { once: true });
+    });
+  </script>
+  <script type="module" src="../scripts/supabase-bridge.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -12,10 +19,27 @@
   <style>
     body { background: #020b09; color: #f2faf7; }
     #landing { display: none !important; }
-    #dashboard { display: block; }
+    #dashboard { display: none !important; }
+    #dashboard.authenticated { display: block !important; }
+    #dashboardInitError { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    #dashboardInitError[hidden] { display: none; }
+    .dashboard-init-error-card { width: min(100%, 520px); padding: 28px; border: 1px solid #285346; border-radius: 16px; background: #0c211b; }
+    .dashboard-init-error-card h1 { margin: 0 0 10px; font-size: 1.35rem; }
+    .dashboard-init-error-card p { margin: 0 0 20px; color: #b7c9c1; line-height: 1.55; }
+    .backend-status { position: fixed; z-index: 2000; right: 20px; bottom: 20px; max-width: 420px; padding: 14px 18px; border: 1px solid #285346; border-radius: 12px; background: #0c211b; color: #f2faf7; }
+    .backend-status[data-tone="error"] { border-color: #9c3d3d; background: #2a1212; }
+    .backend-status[hidden] { display: none; }
   </style>
 </head>
 <body class="dashboard-page">
+  <div class="backend-status" id="backendStatus" role="status" aria-live="polite" hidden></div>
+  <main id="dashboardInitError" role="alert" hidden>
+    <section class="dashboard-init-error-card">
+      <h1>Dashboard could not be loaded</h1>
+      <p id="dashboardInitErrorMessage">Please try again.</p>
+      <button type="button" class="btn btn-primary" onclick="window.location.reload()">Retry</button>
+    </section>
+  </main>
   <!-- ==================== DASHBOARD ==================== -->
   <div id="dashboard">
     <div class="dash-layout">
@@ -227,19 +251,24 @@
           <input type="hidden" id="custEditNo" value="" />
           <div class="form-group">
             <label for="custNo">Customer No.</label>
-            <input type="text" id="custNo" placeholder="e.g. C-001" required />
+            <input type="text" id="custNo" maxlength="5" placeholder="e.g. C0001" required />
           </div>
           <div class="form-group">
             <label for="custName">Customer Name</label>
-            <input type="text" id="custName" placeholder="Company or person name" required />
+            <input type="text" id="custName" maxlength="20" placeholder="Company or person name" required />
           </div>
           <div class="form-group">
             <label for="custAddress">Address</label>
-            <input type="text" id="custAddress" placeholder="Full address" required />
+            <input type="text" id="custAddress" maxlength="50" placeholder="Full address" required />
           </div>
           <div class="form-group">
             <label for="custPayterms">Payment Terms</label>
-            <input type="text" id="custPayterms" placeholder="e.g. Net 30, COD, Prepaid" required />
+            <select id="custPayterms" required style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;">
+              <option value="" disabled selected>Select payment terms</option>
+              <option value="COD">COD</option>
+              <option value="30D">30 days</option>
+              <option value="45D">45 days</option>
+            </select>
           </div>
           <div style="display:flex;gap:10px;margin-top:8px;">
             <button type="submit" class="btn btn-primary btn-full" id="customerSaveBtn">Save Customer</button>
@@ -247,6 +276,16 @@
           </div>
         </form>
       </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="customerDetailsModal">
+    <div class="modal modal-xl">
+      <div class="modal-header">
+        <div><h2 id="customerDetailsTitle">Customer Details</h2><p id="customerDetailsSub"></p></div>
+        <button class="modal-close" onclick="closeCustomerDetails()">&times;</button>
+      </div>
+      <div class="modal-body" id="customerDetailsBody"></div>
     </div>
   </div>
 
@@ -266,15 +305,22 @@
           <input type="hidden" id="prodEditCode" value="" />
           <div class="form-group">
             <label for="prodCode">Product Code</label>
-            <input type="text" id="prodCode" placeholder="e.g. P-001" required />
+            <input type="text" id="prodCode" maxlength="6" placeholder="e.g. AD0001" required />
           </div>
           <div class="form-group">
             <label for="prodDesc">Description</label>
-            <input type="text" id="prodDesc" placeholder="Product description" required />
+            <input type="text" id="prodDesc" maxlength="30" placeholder="Product description" required />
           </div>
           <div class="form-group">
             <label for="prodUnit">Unit</label>
-            <input type="text" id="prodUnit" placeholder="e.g. pcs, box, kg, liter" required />
+            <select id="prodUnit" required style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;">
+              <option value="" disabled selected>Select a unit</option>
+              <option value="pc">pc</option>
+              <option value="ea">ea</option>
+              <option value="mtr">mtr</option>
+              <option value="pkg">pkg</option>
+              <option value="ltr">ltr</option>
+            </select>
           </div>
           <div style="display:flex;gap:10px;margin-top:8px;">
             <button type="submit" class="btn btn-primary btn-full" id="productSaveBtn">Save Product</button>
@@ -309,7 +355,7 @@
           </div>
           <div class="form-group">
             <label for="priceUnitPrice">Unit Price</label>
-            <input type="number" id="priceUnitPrice" step="0.01" min="0" placeholder="0.00" required />
+            <input type="number" id="priceUnitPrice" step="0.01" min="0.01" max="99999999.99" placeholder="0.00" required />
           </div>
           <div style="display:flex;gap:10px;margin-top:8px;">
             <button type="submit" class="btn btn-primary btn-full" id="priceSaveBtn">Save Price</button>
@@ -392,16 +438,16 @@
         <form id="empForm" onsubmit="saveEmployee(event)">
           <input type="hidden" id="empEditNo" value="" />
           <div class="form-row">
-            <div class="form-group"><label>Employee No.</label><input type="text" id="empNo" required placeholder="E-001" /></div>
+            <div class="form-group"><label>Employee No.</label><input type="text" id="empNo" maxlength="5" required placeholder="00001" /></div>
             <div class="form-group"><label>Gender</label>
               <select id="empGender" required style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;">
-                <option value="M">Male</option><option value="F">Female</option><option value="O">Other</option>
+                <option value="M">Male</option><option value="F">Female</option>
               </select>
             </div>
           </div>
           <div class="form-row">
-            <div class="form-group"><label>First Name</label><input type="text" id="empFirst" required /></div>
-            <div class="form-group"><label>Last Name</label><input type="text" id="empLast" required /></div>
+            <div class="form-group"><label>First Name</label><input type="text" id="empFirst" maxlength="15" required /></div>
+            <div class="form-group"><label>Last Name</label><input type="text" id="empLast" maxlength="15" required /></div>
           </div>
           <div class="form-row">
             <div class="form-group"><label>Birth Date</label><input type="date" id="empBirth" required /></div>
@@ -428,8 +474,8 @@
         <div class="alert alert-error" id="jobError"></div>
         <form id="jobForm" onsubmit="saveJob(event)">
           <input type="hidden" id="jobEditCode" value="" />
-          <div class="form-group"><label>Job Code</label><input type="text" id="jobCode" required placeholder="J-001" /></div>
-          <div class="form-group"><label>Job Description</label><input type="text" id="jobDesc" required /></div>
+          <div class="form-group"><label>Job Code</label><input type="text" id="jobCode" maxlength="4" required placeholder="PR1" /></div>
+          <div class="form-group"><label>Job Description</label><input type="text" id="jobDesc" maxlength="20" required /></div>
           <div style="display:flex;gap:10px;margin-top:8px;">
             <button type="submit" class="btn btn-primary btn-full" id="jobSaveBtn">Save Job</button>
             <button type="button" class="btn btn-secondary" onclick="closeJobModal()" style="min-width:100px;">Cancel</button>
@@ -450,13 +496,30 @@
         <div class="alert alert-error" id="deptError"></div>
         <form id="deptForm" onsubmit="saveDept(event)">
           <input type="hidden" id="deptEditCode" value="" />
-          <div class="form-group"><label>Department Code</label><input type="text" id="deptCode" required placeholder="D-001" /></div>
-          <div class="form-group"><label>Department Name</label><input type="text" id="deptName" required /></div>
+          <div class="form-group"><label>Department Code</label><input type="text" id="deptCode" maxlength="3" required placeholder="ACT" /></div>
+          <div class="form-group"><label>Department Name</label><input type="text" id="deptName" maxlength="20" required /></div>
           <div style="display:flex;gap:10px;margin-top:8px;">
             <button type="submit" class="btn btn-primary btn-full" id="deptSaveBtn">Save Department</button>
             <button type="button" class="btn btn-secondary" onclick="closeDeptModal()" style="min-width:100px;">Cancel</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="departmentEmployeesModal">
+    <div class="modal modal-xl">
+      <div class="modal-header">
+        <div><h2 id="departmentEmployeesTitle">Department Employee History</h2><p id="departmentEmployeesSub"></p></div>
+        <button class="modal-close" onclick="closeDepartmentEmployees()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="data-table-wrap modal-body-scroll">
+          <table class="data-table">
+            <thead><tr><th>Employee</th><th>Job</th><th>Effective Date</th><th>Salary</th></tr></thead>
+            <tbody id="departmentEmployeesBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -524,7 +587,7 @@
         <div class="alert alert-error" id="salesError"></div>
         <form id="salesForm" onsubmit="saveSale(event)">
           <input type="hidden" id="salesEditNo" value="" />
-          <div class="form-group"><label>Transaction No.</label><input type="text" id="salesTransNo" required placeholder="T-001" /></div>
+          <div class="form-group"><label>Transaction No.</label><input type="text" id="salesTransNo" maxlength="8" required placeholder="TR000001" /></div>
           <div class="form-group"><label>Sales Date</label><input type="date" id="salesDate" required /></div>
           <div class="form-group"><label>Customer</label>
             <select id="salesCustNo" required style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;"></select>
@@ -535,6 +598,33 @@
           <div style="display:flex;gap:10px;margin-top:8px;">
             <button type="submit" class="btn btn-primary btn-full" id="salesSaveBtn">Save Sale</button>
             <button type="button" class="btn btn-secondary" onclick="closeSalesModal()" style="min-width:100px;">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="paymentModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <div><h2 id="paymentModalTitle">Add Payment</h2><p>Payment record linked to a sales transaction</p></div>
+        <button class="modal-close" onclick="closePaymentModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-error" id="paymentError"></div>
+        <form id="paymentForm" onsubmit="savePayment(event)">
+          <input type="hidden" id="paymentEditNo" value="" />
+          <div class="form-group"><label for="paymentOrNo">Receipt No.</label><input type="text" id="paymentOrNo" maxlength="8" required placeholder="OR000001" /></div>
+          <div class="form-row">
+            <div class="form-group"><label for="paymentDate">Payment Date</label><input type="date" id="paymentDate" required /></div>
+            <div class="form-group"><label for="paymentAmount">Amount</label><input type="number" id="paymentAmount" min="0" max="99999999.99" step="0.01" required /></div>
+          </div>
+          <div class="form-group"><label for="paymentTransNo">Sales Transaction</label>
+            <select id="paymentTransNo" style="width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;"></select>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:8px;">
+            <button type="submit" class="btn btn-primary btn-full" id="paymentSaveBtn">Save Payment</button>
+            <button type="button" class="btn btn-secondary" onclick="closePaymentModal()" style="min-width:100px;">Cancel</button>
           </div>
         </form>
       </div>
@@ -593,7 +683,6 @@
     <div class="modal profile-panel-modal">
       <div class="profile-panel-header">
         <div class="profile-panel-user">
-          <div class="profile-panel-avatar" id="profileHeaderAvatar">S</div>
           <div class="profile-panel-meta">
             <div class="profile-panel-name" id="profileHeaderName">User</div>
             <div class="profile-panel-email" id="profileHeaderEmail"></div>
@@ -609,7 +698,10 @@
           <div class="profile-panel-main">
             <div class="profile-image-stack">
               <div class="profile-main-avatar" id="profileMainAvatar">S</div>
-              <button type="button" class="profile-camera-button" aria-label="Change profile picture">◌</button>
+              <button type="button" class="profile-avatar-edit" id="profileAvatarButton" aria-label="Change profile picture">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16.5 3.5 4 4M4 20l4.3-.9L19.6 7.8a2.1 2.1 0 0 0-3-3L5.3 16.1 4 20Z"></path></svg>
+              </button>
+              <input type="file" id="profileAvatarInput" accept="image/png,image/jpeg,image/webp" hidden />
             </div>
 
             <div class="profile-form-area">
@@ -655,12 +747,38 @@
           </div>
 
           <div class="profile-panel-footer">
+            <div class="alert alert-success" id="profileSuccess" hidden>Profile updated.</div>
             <button type="button" class="btn btn-secondary profile-cancel-btn" onclick="closeModal('profile')">Cancel</button>
             <button type="submit" class="btn btn-primary profile-save-btn">Save Changes</button>
           </div>
         </form>
       </div>
     </div>
+  </div>
+
+  <div class="modal-overlay avatar-crop-overlay" id="avatarCropModal" aria-hidden="true">
+    <section class="avatar-crop-dialog" role="dialog" aria-modal="true" aria-labelledby="avatarCropTitle">
+      <header class="avatar-crop-header">
+        <h2 id="avatarCropTitle">Edit Profile Picture</h2>
+        <button type="button" class="avatar-crop-close" id="avatarCropClose" aria-label="Close image editor">&times;</button>
+      </header>
+      <div class="avatar-crop-stage" id="avatarCropStage">
+        <img id="avatarCropImage" alt="Profile picture crop preview" draggable="false" />
+        <div class="avatar-crop-circle" aria-hidden="true"></div>
+      </div>
+      <div class="avatar-crop-zoom">
+        <span aria-hidden="true">−</span>
+        <input type="range" id="avatarCropZoom" min="1" max="3" step="0.01" value="1" aria-label="Zoom profile picture" />
+        <span aria-hidden="true">+</span>
+      </div>
+      <footer class="avatar-crop-footer">
+        <button type="button" class="avatar-crop-reset" id="avatarCropReset">Reset</button>
+        <div>
+          <button type="button" class="btn btn-secondary" id="avatarCropCancel">Cancel</button>
+          <button type="button" class="btn btn-primary" id="avatarCropApply">Apply</button>
+        </div>
+      </footer>
+    </section>
   </div>
 
   <!-- ==================== USER MGMT: ADD/EDIT USER MODAL ==================== -->
@@ -761,6 +879,7 @@
       'reports.allEmployees': 'All Employees',
       'reports.empJobHistory': 'Employee Job History',
       'reports.topSales': 'Top Sales',
+      'reports.payment': 'Payment Report',
     };
     const PERM_GROUPS = [
       { key: 'customers', label: 'Customer Management', view: 'customers.view',
@@ -774,11 +893,11 @@
         items: ['sales.add','sales.edit','sales.delete','sales.detailView','sales.detailAdd','sales.detailEdit','sales.detailDelete'] },
       { key: 'reports', label: 'Reports', view: 'reports.view',
         items: ['reports.topCustomers','reports.productMaster','reports.topProducts','reports.activeEmployees',
-                'reports.allEmployees','reports.empJobHistory','reports.topSales'] },
+                'reports.allEmployees','reports.empJobHistory','reports.topSales','reports.payment'] },
     ];
     function fullPerms() {
       const p = {};
-      Object.keys(ALL_PERMS).forEach(k => p[k] = true);
+      Object.keys(ALL_PERMS).forEach(k => p[k] = k !== 'reports.payment');
       return p;
     }
     function emptyPerms() {
@@ -786,58 +905,19 @@
       Object.keys(ALL_PERMS).forEach(k => p[k] = false);
       return p;
     }
-    // Sample user: customers + products view/add/edit, no delete, limited reports
-    function sampleUserPerms() {
-      const p = emptyPerms();
-      ['customers.view','customers.add','customers.edit',
-       'products.view','products.add','products.edit',
-       'sales.view','sales.detailView',
-       'reports.view','reports.productMaster','reports.topSales'].forEach(k => p[k] = true);
-      return p;
-    }
-
-    const DEFAULT_USERS = [
-      { email: 'superadmin@hope.com', firstName: 'Sarah', lastName: 'Chen', role: 'superadmin', status: 'active', perms: fullPerms() },
-      { email: 'ceo@hope.com',        firstName: 'Michael', lastName: 'Reyes', role: 'superadmin', status: 'active', perms: fullPerms() },
-    ];
-    const LEGACY_DEMO_ACCOUNT_EMAILS = new Set([
-      'admin@hope.com',
-      'manager@hope.com',
-      'user@hope.com'
-    ]);
-
-    let memoryUsers = null;
+    let memoryUsers = [];
 
     function getUsers() {
-      try {
-        const stored = localStorage.getItem('hope_erp_users_v3');
-        if (stored) {
-          const users = [...DEFAULT_USERS];
-          JSON.parse(stored).forEach(savedUser => {
-            if (LEGACY_DEMO_ACCOUNT_EMAILS.has(savedUser.email.toLowerCase())) return;
-            if (!savedUser.perms) {
-              savedUser.perms = savedUser.role === 'admin' ? fullPerms() : emptyPerms();
-            }
-            const index = users.findIndex(user => user.email.toLowerCase() === savedUser.email.toLowerCase());
-            if (index >= 0) users[index] = savedUser;
-            else users.push(savedUser);
-          });
-          localStorage.setItem('hope_erp_users_v3', JSON.stringify(users));
-          return users;
-        }
-        localStorage.setItem('hope_erp_users_v3', JSON.stringify(DEFAULT_USERS));
-        return [...DEFAULT_USERS];
-      } catch (e) {
-        if (!memoryUsers) memoryUsers = [...DEFAULT_USERS];
-        return memoryUsers;
-      }
+      return memoryUsers;
     }
     function saveUsers(users) {
-      try { localStorage.setItem('hope_erp_users_v3', JSON.stringify(users)); }
-      catch (e) { memoryUsers = users; }
+      memoryUsers = users;
     }
     function findUser(email) {
       return getUsers().find(u => u.email.toLowerCase() === email.toLowerCase());
+    }
+    function findUserById(id) {
+      return getUsers().find(user => user.id === id);
     }
     function upsertUser(user) {
       const users = getUsers();
@@ -850,18 +930,322 @@
     function can(perm) {
       if (!currentUser) return false;
       if (currentUser.role === 'superadmin') return true;
-      const u = findUser(currentUser.email);
-      if (!u || !u.perms) return false;
       const separator = perm.indexOf('.');
       if (separator > 0) {
         const module = perm.slice(0, separator);
         const moduleView = `${module}.view`;
-        if (perm !== moduleView && !u.perms[moduleView]) return false;
+        if (perm !== moduleView && !currentUser.perms?.[moduleView]) return false;
       }
-      return !!u.perms[perm];
+      return !!currentUser.perms?.[perm];
     }
     function canModule(mod) {
       return can(mod + '.view');
+    }
+
+    const DATABASE_TABLES = {
+      customers: {
+        table: 'customer',
+        key: ['custNo'],
+        permission: 'customers.view',
+        columns: { custno: 'custNo', custname: 'custName', address: 'address', payterm: 'payterms', is_deleted: 'isDeleted', stamp: 'stamp' }
+      },
+      products: {
+        table: 'product',
+        key: ['prodCode'],
+        permission: 'products.view',
+        columns: { prodcode: 'prodCode', description: 'description', unit: 'unit', is_deleted: 'isDeleted', stamp: 'stamp' }
+      },
+      prices: {
+        table: 'pricehist',
+        key: ['effDate', 'prodCode'],
+        permission: 'products.view',
+        columns: { effdate: 'effDate', prodcode: 'prodCode', unitprice: 'unitPrice', is_deleted: 'isDeleted', stamp: 'stamp' }
+      },
+      employees: {
+        table: 'employee',
+        key: ['empNo'],
+        permission: 'hr.view',
+        columns: { empno: 'empNo', lastname: 'lastName', firstname: 'firstName', gender: 'gender', birthdate: 'birthDate', hiredate: 'hireDate', sepdate: 'sepDate', is_deleted: 'isDeleted', stamp: 'stamp' }
+      },
+      departments: {
+        table: 'department',
+        key: ['deptCode'],
+        permission: 'hr.view',
+        columns: { deptcode: 'deptCode', deptname: 'deptName', is_deleted: 'isDeleted', stamp: 'stamp' }
+      },
+      jobs: {
+        table: 'job',
+        key: ['jobCode'],
+        permission: 'hr.view',
+        columns: { jobcode: 'jobCode', jobdesc: 'jobDesc', is_deleted: 'isDeleted', stamp: 'stamp' }
+      },
+      jobHistory: {
+        table: 'jobhistory',
+        key: ['empNo', 'jobCode', 'effDate'],
+        permission: 'hr.jhView',
+        columns: { empno: 'empNo', jobcode: 'jobCode', effdate: 'effDate', salary: 'salary', deptcode: 'deptCode', is_deleted: 'isDeleted', stamp: 'stamp' }
+      },
+      sales: {
+        table: 'sales',
+        key: ['transNo'],
+        permission: 'sales.view',
+        columns: { transno: 'transNo', salesdate: 'salesDate', custno: 'custNo', empno: 'empNo', is_deleted: 'isDeleted', stamp: 'stamp' }
+      },
+      saleDetails: {
+        table: 'salesdetail',
+        key: ['transNo', 'prodCode'],
+        permission: 'sales.detailView',
+        columns: { transno: 'transNo', prodcode: 'prodCode', quantity: 'quantity', is_deleted: 'isDeleted', stamp: 'stamp' }
+      },
+      payments: {
+        table: 'payment',
+        key: ['orNo'],
+        permission: 'sales.view',
+        columns: { orno: 'orNo', paydate: 'payDate', amount: 'amount', transno: 'transNo', is_deleted: 'isDeleted', stamp: 'stamp' }
+      }
+    };
+    const databaseCache = {
+      customers: [],
+      products: [],
+      prices: [],
+      employees: [],
+      departments: [],
+      jobs: [],
+      jobHistory: [],
+      sales: [],
+      saleDetails: [],
+      payments: [],
+      activity: []
+    };
+    const databaseSnapshots = Object.create(null);
+    const databaseQueues = Object.create(null);
+    let activePage = 'dashboard';
+    let backendStatusTimer = null;
+    let activeAvatarFile = null;
+    let activeAvatarObjectUrl = null;
+    let avatarCropBitmap = null;
+    let avatarCropObjectUrl = null;
+    let avatarCropZoom = 1;
+    let avatarCropOffsetX = 0;
+    let avatarCropOffsetY = 0;
+    let avatarCropDrag = null;
+    let databaseConnected = false;
+
+    function discardPendingAvatar() {
+      activeAvatarFile = null;
+      if (activeAvatarObjectUrl) {
+        URL.revokeObjectURL(activeAvatarObjectUrl);
+        activeAvatarObjectUrl = null;
+      }
+      closeAvatarCrop(false);
+    }
+
+    function showBackendStatus(message, tone) {
+      const status = document.getElementById('backendStatus');
+      if (!status) return;
+      status.textContent = message;
+      status.dataset.tone = tone || 'info';
+      status.hidden = false;
+      window.clearTimeout(backendStatusTimer);
+      backendStatusTimer = window.setTimeout(() => { status.hidden = true; }, 7000);
+    }
+
+    function profileFromDatabase(row) {
+      return {
+        id: row.id,
+        email: row.email,
+        firstName: row.first_name || '',
+        lastName: row.last_name || '',
+        phone: row.phone || '',
+        role: row.role,
+        status: row.account_status,
+        perms: row.permissions || {},
+        avatarPath: row.avatar_path || null
+      };
+    }
+
+    async function refreshUserProfiles(client) {
+      const { data, error } = await client.from('profiles')
+        .select('id,email,first_name,last_name,phone,role,account_status,permissions,avatar_path')
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      memoryUsers = data.map(profileFromDatabase);
+    }
+
+    function recordFromDatabase(definition, row) {
+      const result = {};
+      Object.entries(definition.columns).forEach(([column, property]) => {
+        result[property] = row[column];
+      });
+      if (result.isDeleted == null) result.isDeleted = false;
+      return result;
+    }
+
+    function recordForDatabase(definition, record) {
+      const result = {};
+      Object.entries(definition.columns).forEach(([column, property]) => {
+        if (property === 'stamp' || record[property] === undefined) return;
+        result[column] = property === 'isDeleted' ? Boolean(record[property]) : record[property];
+      });
+      return result;
+    }
+
+    function recordKey(definition, record) {
+      return definition.key.map(key => String(record[key] ?? '')).join('|');
+    }
+
+    function setDatabaseCache(name, records, snapshot) {
+      databaseCache[name] = records;
+      databaseSnapshots[name] = snapshot || structuredClone(records);
+      switch (name) {
+        case 'customers': memoryCustomers = records; break;
+        case 'products': memoryProducts = records; break;
+        case 'prices': memoryPrices = records; break;
+        case 'employees': _mE.v = records; break;
+        case 'departments': _mD.v = records; break;
+        case 'jobs': _mJ.v = records; break;
+        case 'jobHistory': _mH.v = records; break;
+        case 'sales': _mS.v = records; break;
+        case 'saleDetails': _mSD.v = records; break;
+        case 'payments': _mP.v = records; break;
+      }
+    }
+
+    async function fetchDatabaseTable(client, name, definition) {
+      if (!can(definition.permission)) {
+        setDatabaseCache(name, [], []);
+        console.info('Dashboard table load skipped:', definition.table);
+        console.info('Dashboard table permission allowed:', false);
+        return;
+      }
+      console.info('Dashboard table load started:', definition.table);
+      const data = [];
+      for (let offset = 0; ; offset += 1000) {
+        const { data: page, error } = await client.schema('public').from(definition.table)
+          .select('*')
+          .range(offset, offset + 999);
+        if (error) {
+          console.error('Dashboard table query failed:', definition.table);
+          console.error('Dashboard table query HTTP status:', error.status || error.statusCode || null);
+          console.error('Dashboard table query error code:', error.code || null);
+          console.error('Dashboard table query error message:', error.message || null);
+          throw error;
+        }
+        data.push(...page);
+        if (page.length < 1000) break;
+      }
+      const records = data.map(row => recordFromDatabase(definition, row));
+      setDatabaseCache(name, records);
+      console.info('Dashboard table query returned rows:', definition.table, records.length);
+      if (name === 'employees') {
+        console.info('Employee array length after database loading:', getEmployees().length);
+      }
+    }
+
+    async function loadDashboardData(client) {
+      console.info('Dashboard business data load started.');
+      await refreshUserProfiles(client);
+
+      for (const [name, definition] of Object.entries(DATABASE_TABLES)) {
+        await fetchDatabaseTable(client, name, definition);
+      }
+
+      const { data: activity, error: activityError } = await client.from('audit_log')
+        .select('audit_id,table_name,action,record_key,new_values,action_by,action_at')
+        .order('action_at', { ascending: false })
+        .limit(50);
+      if (activityError) throw activityError;
+      databaseCache.activity = activity;
+      databaseConnected = true;
+      console.info('Dashboard business data load completed.');
+    }
+
+    async function refreshDashboardActivity(client) {
+      const { data, error } = await client.from('audit_log')
+        .select('audit_id,table_name,action,record_key,new_values,action_by,action_at')
+        .order('action_at', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      databaseCache.activity = data;
+    }
+
+    async function saveManagedUser(user) {
+      const client = await window.spotibaiSupabaseReady;
+      const { error } = await client.rpc('manage_profile', {
+        target_user_id: user.id,
+        new_role: user.role,
+        new_status: user.status,
+        new_permissions: user.perms || {},
+        new_first_name: user.firstName,
+        new_last_name: user.lastName || ''
+      });
+      if (error) throw error;
+      await refreshUserProfiles(client);
+    }
+
+    async function persistDatabaseCollection(name, records) {
+      const client = await window.spotibaiSupabaseReady;
+      const definition = DATABASE_TABLES[name];
+      const before = databaseSnapshots[name] || [];
+      const previousByKey = new Map(before.map(record => [recordKey(definition, record), record]));
+      const currentByKey = new Map(records.map(record => [recordKey(definition, record), record]));
+      const changed = [...currentByKey.entries()].filter(([key, record]) => {
+        const previous = previousByKey.get(key);
+        return !previous || JSON.stringify(recordForDatabase(definition, previous))
+          !== JSON.stringify(recordForDatabase(definition, record));
+      });
+
+      for (const [key, record] of changed) {
+        const row = recordForDatabase(definition, record);
+        let query = client.from(definition.table);
+        if (previousByKey.has(key)) {
+          query = query.update(row);
+          definition.key.forEach(property => {
+            const column = Object.keys(definition.columns).find(item => definition.columns[item] === property);
+            query = query.eq(column, record[property]);
+          });
+        } else {
+          query = query.insert(row);
+        }
+        const { data, error } = await query.select('*').single();
+        if (error) throw error;
+        const saved = recordFromDatabase(definition, data);
+        const index = records.findIndex(item => recordKey(definition, item) === key);
+        if (index >= 0) records[index] = saved;
+      }
+
+      setDatabaseCache(name, records);
+      await refreshDashboardActivity(client);
+      if (activePage === 'dashboard') renderDashboardHome();
+      else navigateTo(activePage);
+      showBackendStatus('Changes saved to Supabase.', 'success');
+    }
+
+    function saveDatabaseCollection(name, records) {
+      setDatabaseCache(name, records, databaseSnapshots[name] || []);
+      const previousQueue = databaseQueues[name] || Promise.resolve();
+      const task = previousQueue.then(() => persistDatabaseCollection(name, records));
+      databaseQueues[name] = task.catch(() => {});
+      task.catch(async error => {
+        console.error(`Unable to save ${name} to Supabase.`, error);
+        showBackendStatus(error.message || `Unable to save ${name}.`, 'error');
+        try {
+          const client = await window.spotibaiSupabaseReady;
+          await fetchDatabaseTable(client, name, DATABASE_TABLES[name]);
+          if (activePage !== 'dashboard') navigateTo(activePage);
+          else renderDashboardHome();
+        } catch (refreshError) {
+          console.error(`Unable to reload ${name} after a failed save.`, refreshError);
+          showBackendStatus(refreshError.message || 'The database state could not be refreshed.', 'error');
+        }
+      });
+    }
+
+    async function refreshProfileAvatar(client, path) {
+      if (!path) return '';
+      const { data, error } = await client.storage.from('avatars').createSignedUrl(path, 3600);
+      if (error) throw error;
+      return data.signedUrl;
     }
 
     // ========== Current user state ==========
@@ -876,6 +1260,7 @@
     function closeModal(name) {
       const modal = document.getElementById(name + 'Modal');
       if (modal) modal.classList.remove('active');
+      if (name === 'profile') discardPendingAvatar();
       // Also clear any leftover active modals
       const anyActive = document.querySelector('.modal-overlay.active');
       if (!anyActive) document.body.style.overflow = '';
@@ -930,11 +1315,16 @@
       overlay.addEventListener('click', (e) => {
         if (e.target !== overlay) return;
         if (overlay.id === 'confirmDeleteModal') closeDeleteConfirmation();
+        else if (overlay.id === 'avatarCropModal') closeAvatarCrop();
         else closeModal(overlay.id.replace('Modal', ''));
       });
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
+        if (document.getElementById('avatarCropModal').classList.contains('active')) {
+          closeAvatarCrop();
+          return;
+        }
         if (document.getElementById('confirmDeleteModal').classList.contains('active')) {
           closeDeleteConfirmation();
           return;
@@ -955,136 +1345,29 @@
     }
 
     // ========== Auth handlers ==========
-    function handleLogin(e) {
+    async function handleLogin(e) {
       if (e) e.preventDefault();
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const errorEl = document.getElementById('loginError');
       try {
-        const email = document.getElementById('loginEmail').value.trim();
-        const password = document.getElementById('loginPassword').value;
-        const errorEl = document.getElementById('loginError');
-
-        if (!email || !password) {
-          errorEl.textContent = 'Please fill in all fields.';
-          errorEl.classList.add('show');
-          return;
-        }
-
-        let user = findUser(email);
-
-        if (!user) {
-          errorEl.textContent = 'No account exists for this email. Ask an administrator to create one.';
-          errorEl.classList.add('show');
-          return;
-        }
-
-        // Normalize legacy users missing status/perms
-        if (!user.status) user.status = 'active';
-        if (!user.perms) {
-          user.perms = (user.role === 'superadmin' || user.role === 'admin') ? fullPerms() : sampleUserPerms();
-          upsertUser(user);
-        }
-
-        if (user.status === 'blocked') {
-          errorEl.textContent = 'This account is blocked. Contact an administrator.';
-          errorEl.classList.add('show');
-          return;
-        }
-        if (user.status === 'pending') {
-          errorEl.textContent = 'This account is pending approval. Contact an administrator.';
-          errorEl.classList.add('show');
-          return;
-        }
-        if (user.status === 'disapproved') {
-          errorEl.textContent = 'This registration was not approved.';
-          errorEl.classList.add('show');
-          return;
-        }
-
-        currentUser = {
-          email: user.email,
-          name: (user.firstName + ' ' + (user.lastName || '')).trim(),
-          role: user.role,
-          firstName: user.firstName || 'User'
-        };
-
-        // Close ALL modals and show dashboard
-        ['login', 'register', 'reset'].forEach(n => {
-          const m = document.getElementById(n + 'Modal');
-          if (m) m.classList.remove('active');
-        });
-        document.body.style.overflow = '';
-        showDashboard();
-      } catch (err) {
-        console.error('Login error:', err);
-        const errorEl = document.getElementById('loginError');
-        if (errorEl) {
-          errorEl.textContent = 'Login failed: ' + err.message;
-          errorEl.classList.add('show');
-        }
+        const client = await window.spotibaiSupabaseReady;
+        const { error } = await client.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        window.location.reload();
+      } catch (error) {
+        console.error('Login failed.', error);
+        errorEl.textContent = error.message || 'Unable to sign in.';
+        errorEl.classList.add('show');
       }
     }
 
     function handleRegister(e) {
       if (e) e.preventDefault();
-      try {
-        const firstName = document.getElementById('regFirstName').value.trim();
-        const lastName = document.getElementById('regLastName').value.trim();
-        const email = document.getElementById('regEmail').value.trim();
-        const errorEl = document.getElementById('registerError');
-        const successEl = document.getElementById('registerSuccess');
-
-        errorEl.classList.remove('show');
-        successEl.classList.remove('show');
-
-        if (!firstName || !lastName || !email) {
-          errorEl.textContent = 'Please fill in all fields.';
-          errorEl.classList.add('show');
-          return;
-        }
-
-        if (findUser(email)) {
-          errorEl.textContent = 'An account with this email already exists. Please sign in.';
-          errorEl.classList.add('show');
-          return;
-        }
-
-        const newUser = { email, firstName, lastName, role: 'user', status: 'pending', perms: emptyPerms() };
-        upsertUser(newUser);
-
-        successEl.textContent = 'Registration submitted. An admin must approve your account before you can sign in.';
-        successEl.classList.add('show');
-        document.getElementById('registerForm').reset();
-        return; // do not auto-login pending users
-
-        currentUser = {
-          email,
-          name: firstName + ' ' + lastName,
-          role: 'user',
-          firstName
-        };
-
-        successEl.textContent = `Account created for ${firstName}! Signing you in...`;
-        successEl.classList.add('show');
-        document.getElementById('registerForm').reset();
-
-        setTimeout(() => {
-          ['login', 'register', 'reset'].forEach(n => {
-            const m = document.getElementById(n + 'Modal');
-            if (m) m.classList.remove('active');
-          });
-          document.body.style.overflow = '';
-          showDashboard();
-        }, 800);
-      } catch (err) {
-        console.error('Register error:', err);
-        const errorEl = document.getElementById('registerError');
-        if (errorEl) {
-          errorEl.textContent = 'Registration failed: ' + err.message;
-          errorEl.classList.add('show');
-        }
-      }
+      window.location.assign('../Login/Login.html?mode=signup');
     }
 
-    function handleReset(e) {
+    async function handleReset(e) {
       e.preventDefault();
       const email = document.getElementById('resetEmail').value.trim();
       const errorEl = document.getElementById('resetError');
@@ -1098,34 +1381,31 @@
         errorEl.classList.add('show');
         return;
       }
-      successEl.textContent = `If an account exists for ${email}, a reset link has been sent.`;
-      successEl.classList.add('show');
-      document.getElementById('resetForm').reset();
+      try {
+        const client = await window.spotibaiSupabaseReady;
+        const redirectTo = new URL('../Login/Login.html?mode=recovery', window.location.href).href;
+        const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
+        if (error) throw error;
+        successEl.textContent = 'If an account exists for that email, a recovery link has been sent.';
+        successEl.classList.add('show');
+      } catch (error) {
+        console.error('Password recovery request failed.', error);
+        errorEl.textContent = error.message || 'Unable to send a password recovery email.';
+        errorEl.classList.add('show');
+      }
     }
 
-    function handleGoogleSignIn() {
+    async function handleGoogleSignIn() {
       try {
-        const email = 'google.user@gmail.com';
-        let user = findUser(email);
-        if (!user) {
-          user = { email, firstName: 'Google', lastName: 'User', role: 'user' };
-          upsertUser(user);
-        }
-        currentUser = {
-          email: user.email,
-          name: user.firstName + ' ' + user.lastName,
-          role: user.role,
-          firstName: user.firstName
-        };
-        ['login', 'register', 'reset'].forEach(n => {
-          const m = document.getElementById(n + 'Modal');
-          if (m) m.classList.remove('active');
+        const client = await window.spotibaiSupabaseReady;
+        const { error } = await client.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.href }
         });
-        document.body.style.overflow = '';
-        showDashboard();
-      } catch (err) {
-        console.error('Google sign-in error:', err);
-        alert('Sign-in failed: ' + err.message);
+        if (error) throw error;
+      } catch (error) {
+        console.error('Google sign-in failed.', error);
+        showBackendStatus(error.message || 'Google sign-in is unavailable.', 'error');
       }
     }
 
@@ -1138,17 +1418,24 @@
       });
       document.body.style.overflow = '';
 
-      document.getElementById('dashboard').style.display = 'block';
-      document.getElementById('dashboard').classList.add('dashboard-home-active');
+      document.getElementById('dashboard').classList.add('authenticated', 'dashboard-home-active');
       renderSidebar();
       renderDashboardHome();
       updateUserInfo();
     }
 
-    function logout() {
+    async function logout() {
       closeHeaderPopovers();
-      currentUser = null;
-      window.location.assign('../Homepage/index.html');
+      try {
+        const client = await window.spotibaiSupabaseReady;
+        const { error } = await client.auth.signOut();
+        if (error) throw error;
+        currentUser = null;
+        window.location.assign('../Homepage/index.html');
+      } catch (error) {
+        console.error('Sign out failed.', error);
+        showBackendStatus(error.message || 'Unable to sign out. Please try again.', 'error');
+      }
     }
 
     function updateUserInfo() {
@@ -1167,26 +1454,37 @@
 
       if (userName) userName.textContent = currentUser.name;
       if (userRoleLabel) userRoleLabel.textContent = currentUser.role;
-      if (userAvatar) userAvatar.textContent = firstLetter;
-      if (profileName) profileName.textContent = currentUser.firstName;
+      if (userAvatar) applyAvatar(userAvatar, currentUser.avatarUrl, firstLetter);
+      if (profileName) profileName.textContent = currentUser.name || currentUser.firstName || 'User';
       if (profileRole) profileRole.textContent = currentUser.role === 'superadmin' ? 'Super Admin' : currentUser.role === 'admin' ? 'Administrator' : 'User';
-      if (profileAvatar) profileAvatar.textContent = firstLetter;
+      if (profileAvatar) applyAvatar(profileAvatar, currentUser.avatarUrl, firstLetter);
       if (profileMenuName) profileMenuName.textContent = currentUser.name;
       if (profileMenuEmail) profileMenuEmail.textContent = currentUser.email;
-      if (profileMenuAvatar) profileMenuAvatar.textContent = firstLetter;
+      if (profileMenuAvatar) applyAvatar(profileMenuAvatar, currentUser.avatarUrl, firstLetter);
       if (manageUsersAction) manageUsersAction.hidden = currentUser.role === 'user';
+    }
+
+    function applyAvatar(element, imageUrl, fallback) {
+      if (!element) return;
+      if (!imageUrl) {
+        element.replaceChildren(document.createTextNode(fallback));
+        return;
+      }
+      const image = document.createElement('img');
+      image.src = imageUrl;
+      image.alt = '';
+      image.referrerPolicy = 'no-referrer';
+      image.style.width = '100%';
+      image.style.height = '100%';
+      image.style.objectFit = 'cover';
+      element.replaceChildren(image);
     }
 
     function openProfileEditor() {
       closeHeaderPopovers();
       if (!currentUser) return;
-      const user = findUser(currentUser.email) || {
-        firstName: currentUser.firstName || '',
-        lastName: currentUser.lastName || '',
-        email: currentUser.email,
-        role: currentUser.role,
-        status: 'active'
-      };
+      discardPendingAvatar();
+      const user = findUser(currentUser.email) || currentUser;
       const roleLabel = currentUser.role === 'superadmin' ? 'Super Admin' : currentUser.role === 'admin' ? 'Administrator' : 'User';
       document.getElementById('profileFirstName').value = user.firstName || '';
       document.getElementById('profileLastName').value = user.lastName || '';
@@ -1199,17 +1497,195 @@
       document.getElementById('profileHeaderName').textContent = `${(user.firstName || currentUser.firstName || 'User')} ${(user.lastName || '').trim()}`.trim() || 'User';
       document.getElementById('profileHeaderEmail').textContent = user.email || currentUser.email || '';
       document.getElementById('profileHeaderRole').textContent = roleLabel;
-      document.getElementById('profileHeaderAvatar').textContent = ((user.firstName || currentUser.firstName || 'U').charAt(0) || 'U').toUpperCase();
-      document.getElementById('profileMainAvatar').textContent = ((user.firstName || currentUser.firstName || 'U').charAt(0) || 'U').toUpperCase();
+      const firstLetter = ((user.firstName || currentUser.firstName || 'U').charAt(0) || 'U').toUpperCase();
+      applyAvatar(document.getElementById('profileMainAvatar'), currentUser.avatarUrl, firstLetter);
+      document.getElementById('profileAvatarInput').value = '';
+      document.getElementById('profileSuccess').hidden = true;
       document.getElementById('profileError').classList.remove('show');
       document.getElementById('profileError').textContent = '';
       document.getElementById('profileModal').classList.add('active');
       document.body.style.overflow = 'hidden';
     }
 
-    function saveProfile(event) {
+    document.getElementById('profileAvatarButton').addEventListener('click', () => {
+      document.getElementById('profileAvatarInput').click();
+    });
+    document.getElementById('profileAvatarInput').addEventListener('change', event => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+        const errorEl = document.getElementById('profileError');
+        errorEl.textContent = 'Choose a PNG, JPEG, or WebP image smaller than 5 MB.';
+        errorEl.classList.add('show');
+        event.target.value = '';
+        return;
+      }
+      openAvatarCrop(file);
+    });
+
+    async function openAvatarCrop(file) {
+      try {
+        closeAvatarCrop();
+        avatarCropBitmap = await createImageBitmap(file);
+        avatarCropObjectUrl = URL.createObjectURL(file);
+        avatarCropZoom = 1;
+        avatarCropOffsetX = 0;
+        avatarCropOffsetY = 0;
+        const modal = document.getElementById('avatarCropModal');
+        document.getElementById('avatarCropZoom').value = '1';
+        document.getElementById('avatarCropImage').src = avatarCropObjectUrl;
+        modal.classList.add('active');
+        modal.setAttribute('aria-hidden', 'false');
+        document.getElementById('avatarCropApply').focus();
+        renderAvatarCrop();
+      } catch (error) {
+        console.error('Unable to open the profile picture editor.', error);
+        const errorEl = document.getElementById('profileError');
+        errorEl.textContent = error.message || 'Unable to open this image. Try another file.';
+        errorEl.classList.add('show');
+      }
+    }
+
+    function closeAvatarCrop(restoreOverflow = true) {
+      const modal = document.getElementById('avatarCropModal');
+      if (modal) {
+        modal.classList.remove('active');
+        modal.setAttribute('aria-hidden', 'true');
+      }
+      if (avatarCropBitmap) {
+        avatarCropBitmap.close();
+        avatarCropBitmap = null;
+      }
+      if (avatarCropObjectUrl) {
+        URL.revokeObjectURL(avatarCropObjectUrl);
+        avatarCropObjectUrl = null;
+      }
+      const image = document.getElementById('avatarCropImage');
+      if (image) image.removeAttribute('src');
+      const fileInput = document.getElementById('profileAvatarInput');
+      if (fileInput) fileInput.value = '';
+      avatarCropDrag = null;
+      document.getElementById('avatarCropStage')?.classList.remove('is-dragging');
+      if (restoreOverflow && !document.querySelector('.modal-overlay.active')) {
+        document.body.style.overflow = '';
+      }
+    }
+
+    function renderAvatarCrop() {
+      if (!avatarCropBitmap) return;
+      const stage = document.getElementById('avatarCropStage');
+      const image = document.getElementById('avatarCropImage');
+      const stageSize = stage.clientWidth;
+      if (!stageSize) return;
+      const cropDiameter = stageSize * 0.78;
+      const scale = Math.max(cropDiameter / avatarCropBitmap.width, cropDiameter / avatarCropBitmap.height) * avatarCropZoom;
+      const width = avatarCropBitmap.width * scale;
+      const height = avatarCropBitmap.height * scale;
+      const maxOffsetX = Math.max(0, (width - cropDiameter) / 2);
+      const maxOffsetY = Math.max(0, (height - cropDiameter) / 2);
+      avatarCropOffsetX = Math.max(-maxOffsetX, Math.min(maxOffsetX, avatarCropOffsetX));
+      avatarCropOffsetY = Math.max(-maxOffsetY, Math.min(maxOffsetY, avatarCropOffsetY));
+      image.style.width = `${width}px`;
+      image.style.height = `${height}px`;
+      image.style.left = `${(stageSize - width) / 2 + avatarCropOffsetX}px`;
+      image.style.top = `${(stageSize - height) / 2 + avatarCropOffsetY}px`;
+    }
+
+    async function createCroppedAvatar() {
+      if (!avatarCropBitmap) throw new Error('Choose a profile picture first.');
+      const stageSize = document.getElementById('avatarCropStage').clientWidth;
+      const cropDiameter = stageSize * 0.78;
+      const scale = Math.max(cropDiameter / avatarCropBitmap.width, cropDiameter / avatarCropBitmap.height) * avatarCropZoom;
+      const imageLeft = (stageSize - avatarCropBitmap.width * scale) / 2 + avatarCropOffsetX;
+      const imageTop = (stageSize - avatarCropBitmap.height * scale) / 2 + avatarCropOffsetY;
+      const sourceSize = cropDiameter / scale;
+      const sourceX = (stageSize / 2 - imageLeft) / scale - sourceSize / 2;
+      const sourceY = (stageSize / 2 - imageTop) / scale - sourceSize / 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 512;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Unable to prepare the profile picture.');
+      context.drawImage(avatarCropBitmap, sourceX, sourceY, sourceSize, sourceSize, 0, 0, canvas.width, canvas.height);
+      return new Promise((resolve, reject) => {
+        canvas.toBlob(blob => {
+          if (blob) resolve(blob);
+          else reject(new Error('Unable to prepare the profile picture.'));
+        }, 'image/png');
+      });
+    }
+
+    document.getElementById('avatarCropZoom').addEventListener('input', event => {
+      avatarCropZoom = Number(event.target.value);
+      renderAvatarCrop();
+    });
+    document.getElementById('avatarCropStage').addEventListener('pointerdown', event => {
+      if (!avatarCropBitmap) return;
+      avatarCropDrag = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        offsetX: avatarCropOffsetX,
+        offsetY: avatarCropOffsetY
+      };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      event.currentTarget.classList.add('is-dragging');
+    });
+    document.getElementById('avatarCropStage').addEventListener('pointermove', event => {
+      if (!avatarCropDrag || avatarCropDrag.pointerId !== event.pointerId) return;
+      avatarCropOffsetX = avatarCropDrag.offsetX + event.clientX - avatarCropDrag.startX;
+      avatarCropOffsetY = avatarCropDrag.offsetY + event.clientY - avatarCropDrag.startY;
+      renderAvatarCrop();
+    });
+    document.getElementById('avatarCropStage').addEventListener('pointerup', event => {
+      if (!avatarCropDrag || avatarCropDrag.pointerId !== event.pointerId) return;
+      avatarCropDrag = null;
+      event.currentTarget.classList.remove('is-dragging');
+    });
+    document.getElementById('avatarCropStage').addEventListener('pointercancel', () => {
+      avatarCropDrag = null;
+      document.getElementById('avatarCropStage').classList.remove('is-dragging');
+    });
+    document.getElementById('avatarCropReset').addEventListener('click', () => {
+      avatarCropZoom = 1;
+      avatarCropOffsetX = 0;
+      avatarCropOffsetY = 0;
+      document.getElementById('avatarCropZoom').value = '1';
+      renderAvatarCrop();
+    });
+    document.getElementById('avatarCropCancel').addEventListener('click', () => closeAvatarCrop());
+    document.getElementById('avatarCropClose').addEventListener('click', () => closeAvatarCrop());
+    document.getElementById('avatarCropApply').addEventListener('click', async () => {
+      const applyButton = document.getElementById('avatarCropApply');
+      applyButton.disabled = true;
+      try {
+        const blob = await createCroppedAvatar();
+        const file = new File([blob], 'profile-picture.png', { type: blob.type });
+        if (activeAvatarObjectUrl) URL.revokeObjectURL(activeAvatarObjectUrl);
+        activeAvatarFile = file;
+        activeAvatarObjectUrl = URL.createObjectURL(file);
+        applyAvatar(
+          document.getElementById('profileMainAvatar'),
+          activeAvatarObjectUrl,
+          (currentUser.firstName || 'U').charAt(0).toUpperCase()
+        );
+        closeAvatarCrop();
+      } catch (error) {
+        console.error('Unable to crop the profile picture.', error);
+        const errorEl = document.getElementById('profileError');
+        errorEl.textContent = error.message || 'Unable to prepare the profile picture.';
+        errorEl.classList.add('show');
+      } finally {
+        applyButton.disabled = false;
+      }
+    });
+    window.addEventListener('resize', renderAvatarCrop);
+
+    async function saveProfile(event) {
       event.preventDefault();
       const errorEl = document.getElementById('profileError');
+      const successEl = document.getElementById('profileSuccess');
+      const saveButton = document.querySelector('#profileForm button[type="submit"]');
       const firstName = document.getElementById('profileFirstName').value.trim();
       const lastName = document.getElementById('profileLastName').value.trim();
       const email = document.getElementById('profileEmail').value.trim();
@@ -1217,6 +1693,7 @@
 
       errorEl.classList.remove('show');
       errorEl.textContent = '';
+      successEl.hidden = true;
 
       if (!firstName || !email) {
         errorEl.textContent = 'Please fill in your first name and email.';
@@ -1224,42 +1701,95 @@
         return;
       }
 
-      const originalEmail = currentUser.email.toLowerCase();
-      const nextEmail = email.toLowerCase();
-      const existing = findUser(nextEmail);
-      if (existing && existing.email.toLowerCase() !== originalEmail) {
-        errorEl.textContent = 'An account with this email already exists.';
+      saveButton.disabled = true;
+      saveButton.textContent = 'Saving…';
+      try {
+        const client = await window.spotibaiSupabaseReady;
+        const authUserResult = await client.auth.getUser();
+        if (authUserResult.error) throw authUserResult.error;
+        const authUser = authUserResult.data.user;
+        if (!authUser || authUser.id !== currentUser.id || !authUser.email) {
+          throw new Error('Your authenticated account could not be verified. Sign in again and retry.');
+        }
+
+        const updates = { first_name: firstName, last_name: lastName, phone: phone };
+        if (activeAvatarFile) {
+          const extension = activeAvatarFile.type.split('/')[1].replace('jpeg', 'jpg');
+          const uploadedPath = `${authUser.id}/${crypto.randomUUID()}.${extension}`;
+          const upload = await client.storage.from('avatars').upload(uploadedPath, activeAvatarFile, {
+            contentType: activeAvatarFile.type,
+            upsert: false
+          });
+          if (upload.error) throw upload.error;
+          updates.avatar_path = uploadedPath;
+        }
+
+        const profileResult = await client.from('profiles')
+          .update(updates)
+          .eq('id', authUser.id)
+          .select('id,email,first_name,last_name,phone,role,account_status,permissions,avatar_path')
+          .single();
+        if (profileResult.error) throw profileResult.error;
+
+        let emailChangeError = '';
+        let emailChangeMessage = '';
+        let verifiedEmail = authUser.email;
+        if (email.toLowerCase() !== authUser.email.toLowerCase()) {
+          try {
+            const emailRedirectTo = new URL('../Dashboard/Dashboard.html', window.location.href).href;
+            const emailResult = await client.auth.updateUser(
+              { email: email.trim() },
+              { emailRedirectTo }
+            );
+            if (emailResult.error) emailChangeError = emailResult.error.message;
+            else {
+              const refreshedAuthUser = await client.auth.getUser();
+              if (refreshedAuthUser.error) throw refreshedAuthUser.error;
+              verifiedEmail = refreshedAuthUser.data.user?.email || authUser.email;
+              emailChangeMessage = verifiedEmail.toLowerCase() === email.toLowerCase()
+                ? ' Supabase Auth reports the new email as active.'
+                : ' Check the new email address for a verification message. Your current email remains active until Supabase confirms the change; the project may also require confirmation at your current address.';
+            }
+          } catch (error) {
+            emailChangeError = error.message || 'Unable to request the email change.';
+          }
+        }
+
+        const refreshedProfileResult = await client.from('profiles')
+          .select('id,email,first_name,last_name,phone,role,account_status,permissions,avatar_path')
+          .eq('id', authUser.id)
+          .single();
+        if (refreshedProfileResult.error) throw refreshedProfileResult.error;
+        const refreshedProfile = profileFromDatabase(refreshedProfileResult.data);
+        refreshedProfile.email = verifiedEmail;
+        currentUser = {
+          ...currentUser,
+          ...refreshedProfile,
+          name: `${refreshedProfile.firstName} ${refreshedProfile.lastName}`.trim() || verifiedEmail.split('@')[0],
+          avatarUrl: await refreshProfileAvatar(client, refreshedProfile.avatarPath)
+        };
+        upsertUser(refreshedProfile);
+        discardPendingAvatar();
+        updateUserInfo();
+        successEl.textContent = `Profile updated.${emailChangeMessage}`;
+        successEl.hidden = Boolean(emailChangeError);
+        if (emailChangeError) {
+          errorEl.textContent = `Profile updated, but the email change could not be requested: ${emailChangeError}`;
+          errorEl.classList.add('show');
+        }
+        document.getElementById('profileEmail').value = currentUser.email;
+        document.getElementById('profileHeaderName').textContent = currentUser.name;
+        document.getElementById('profileHeaderEmail').textContent = currentUser.email;
+        applyAvatar(document.getElementById('profileMainAvatar'), currentUser.avatarUrl, firstName.charAt(0).toUpperCase());
+        renderDashboardHome();
+      } catch (error) {
+        console.error('Unable to update the authenticated profile.', error);
+        errorEl.textContent = error.message || 'Unable to save profile changes.';
         errorEl.classList.add('show');
-        return;
+      } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = 'Save Changes';
       }
-
-      const user = findUser(originalEmail) || {
-        email: currentUser.email,
-        firstName: currentUser.firstName || '',
-        lastName: currentUser.lastName || '',
-        role: currentUser.role,
-        status: 'active',
-        perms: sampleUserPerms()
-      };
-
-      user.firstName = firstName;
-      user.lastName = lastName;
-      user.email = nextEmail;
-      user.phone = phone;
-      upsertUser(user);
-
-      currentUser = {
-        email: user.email,
-        name: `${user.firstName} ${user.lastName || ''}`.trim() || user.email.split('@')[0],
-        role: user.role,
-        firstName: user.firstName || 'User',
-        lastName: user.lastName || '',
-        phone: user.phone || ''
-      };
-
-      updateUserInfo();
-      closeModal('profile');
-      if (typeof renderDashboardHome === 'function') renderDashboardHome();
     }
 
     function dashboardIcon(name) {
@@ -1436,6 +1966,7 @@
       if (page === 'users' && !['superadmin', 'admin'].includes(currentUser.role)) return;
       if (['customers', 'products', 'hr', 'sales', 'reports'].includes(page) && !canModule(page)) return;
 
+      activePage = page;
       document.getElementById('dashboard').classList.remove('mobile-nav-open');
       document.getElementById('dashboard').classList.toggle('dashboard-home-active', page === 'dashboard');
       document.getElementById('mobileNavToggle').setAttribute('aria-expanded', 'false');
@@ -1470,28 +2001,16 @@
     // ========== CUSTOMERS MODULE ==========
     const DEFAULT_CUSTOMERS = [];
 
-    let memoryCustomers = null;
+    let memoryCustomers = [];
     let customerFilter = 'active'; // 'active' | 'deleted' | 'all'
     let customerSearch = '';
 
     function getCustomers() {
-      try {
-        const stored = localStorage.getItem('hope_erp_customers_v2');
-        if (stored) return JSON.parse(stored);
-        localStorage.setItem('hope_erp_customers_v2', JSON.stringify(DEFAULT_CUSTOMERS));
-        return [...DEFAULT_CUSTOMERS];
-      } catch (e) {
-        if (!memoryCustomers) memoryCustomers = [...DEFAULT_CUSTOMERS];
-        return memoryCustomers;
-      }
+      return memoryCustomers;
     }
 
     function saveCustomers(list) {
-      try {
-        localStorage.setItem('hope_erp_customers_v2', JSON.stringify(list));
-      } catch (e) {
-        memoryCustomers = list;
-      }
+      saveDatabaseCollection('customers', list);
     }
 
     function makeStamp(action) {
@@ -1545,12 +2064,14 @@
           let actions = '';
           if (c.isDeleted) {
             if (canRestore) {
-              actions = `<button class="btn-restore" onclick="restoreCustomer('${c.custNo}')">Restore</button>`;
+              actions = `<button class="btn-edit" onclick='openCustomerDetails(${dashboardActionArgument(c.custNo)})'>View</button>
+                <button class="btn-restore" onclick="restoreCustomer('${c.custNo}')">Restore</button>`;
             } else {
               actions = '—';
             }
           } else {
             actions = `
+              <button class="btn-edit" onclick='openCustomerDetails(${dashboardActionArgument(c.custNo)})'>View</button>
               ${can('customers.edit') ? `<button class="btn-edit" onclick="openEditCustomer('${c.custNo}')">Edit</button>` : ''}
               ${can('customers.delete') ? `<button class="btn-del" onclick="softDeleteCustomer('${c.custNo}')">Delete</button>` : ''}
               ${!can('customers.edit') && !can('customers.delete') ? '—' : ''}
@@ -1654,6 +2175,55 @@
       document.body.style.overflow = '';
     }
 
+    function openCustomerDetails(custNo) {
+      const customer = getCustomers().find(record => record.custNo === custNo);
+      if (!customer || !can('customers.view')) return;
+
+      const relatedSales = can('sales.view')
+        ? getSales().filter(sale => sale.custNo === custNo && !sale.isDeleted)
+        : [];
+      const salesRows = relatedSales.length
+        ? relatedSales.map(sale => {
+            const employee = can('hr.view')
+              ? getEmployees().find(record => record.empNo === sale.empNo)
+              : null;
+            const payments = getPayments().filter(payment => payment.transNo === sale.transNo && !payment.isDeleted);
+            const paymentSummary = payments.length
+              ? payments.map(payment => `${escapeDashboardHtml(payment.orNo)} · ${escapeDashboardHtml(payment.payDate)} · $${Number(payment.amount || 0).toFixed(2)}`).join('<br>')
+              : 'No payments recorded';
+            return `<tr>
+              <td><strong>${escapeDashboardHtml(sale.transNo)}</strong></td>
+              <td>${escapeDashboardHtml(sale.salesDate)}</td>
+              <td>${escapeDashboardHtml(employee ? `${employee.firstName} ${employee.lastName}` : (can('hr.view') ? sale.empNo : '—'))}</td>
+              <td>${paymentSummary}</td>
+            </tr>`;
+          }).join('')
+        : `<tr><td colspan="4"><div class="empty-state">${can('sales.view') ? 'No sales recorded for this customer.' : 'Sales and payment information is not available to your account.'}</div></td></tr>`;
+
+      document.getElementById('customerDetailsTitle').textContent = customer.custName;
+      document.getElementById('customerDetailsSub').textContent = `Customer ${customer.custNo}`;
+      document.getElementById('customerDetailsBody').innerHTML = `
+        <dl class="profile-details-grid">
+          <div><dt>Customer No.</dt><dd>${escapeDashboardHtml(customer.custNo)}</dd></div>
+          <div><dt>Payment Terms</dt><dd>${escapeDashboardHtml(customer.payterms)}</dd></div>
+          <div><dt>Address</dt><dd>${escapeDashboardHtml(customer.address)}</dd></div>
+        </dl>
+        <h3 style="margin:22px 0 12px;">Sales and Payments</h3>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Transaction</th><th>Sales Date</th><th>Employee</th><th>Payments</th></tr></thead>
+            <tbody>${salesRows}</tbody>
+          </table>
+        </div>`;
+      document.getElementById('customerDetailsModal').classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeCustomerDetails() {
+      document.getElementById('customerDetailsModal').classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
     function saveCustomer(e) {
       e.preventDefault();
       const errorEl = document.getElementById('customerError');
@@ -1666,8 +2236,9 @@
       const address = document.getElementById('custAddress').value.trim();
       const payterms = document.getElementById('custPayterms').value.trim();
 
-      if (!custNo || !custName || !address || !payterms) {
-        errorEl.textContent = 'All fields are required.';
+      if (!custNo || custNo.length > 5 || !custName || custName.length > 20
+          || !address || address.length > 50 || !['COD', '30D', '45D'].includes(payterms)) {
+        errorEl.textContent = 'Enter a customer number (up to 5 characters), name (up to 20), address (up to 50), and valid payment terms.';
         errorEl.classList.add('show');
         return;
       }
@@ -1731,36 +2302,39 @@
       })[character]);
     }
 
-    function getDashboardActivity() {
-      const activity = [];
-      const addRecords = (page, records, getTitle, getDescription) => {
-        if (!canModule(page)) return;
-        records.forEach(record => {
-          if (record.isDeleted && currentUser.role === 'user') return;
-          const stamp = String(record.stamp || '');
-          const match = stamp.match(/(CREATED|EDITED|DELETED|RESTORED)\s+\S+\s+(\d{4}-\d{2}-\d{2})\s+(\d{1,2}):(\d{2})\s+(AM|PM)/i);
-          if (!match) return;
-          let hour = Number(match[3]) % 12;
-          if (match[5].toUpperCase() === 'PM') hour += 12;
-          activity.push({
-            page,
-            action: match[1].toLowerCase(),
-            verb: { CREATED: 'Created', EDITED: 'Updated', DELETED: 'Removed', RESTORED: 'Restored' }[match[1].toUpperCase()],
-            title: getTitle(record),
-            description: getDescription(record),
-            date: new Date(`${match[2]}T${String(hour).padStart(2, '0')}:${match[4]}:00`)
-          });
-        });
-      };
+    function dashboardActionArgument(value) {
+      return escapeDashboardHtml(JSON.stringify(String(value)));
+    }
 
-      addRecords('customers', getCustomers(), () => 'Customer', record => record.custName);
-      addRecords('products', getProducts(), () => 'Product', record => record.description);
-      addRecords('hr', getEmployees(), () => 'Employee', record => `${record.firstName} ${record.lastName}`);
-      addRecords('sales', getSales(), () => 'Sales transaction', record => record.transNo);
-      activity.forEach(item => {
-        item.title = `${item.verb} ${item.title}`;
-      });
-      return activity.sort((a, b) => b.date - a.date);
+    function getDashboardActivity() {
+      const modules = {
+        customer: { page: 'customers', label: 'Customer', name: values => values.custname },
+        product: { page: 'products', label: 'Product', name: values => values.description },
+        pricehist: { page: 'products', label: 'Product price', name: values => values.prodcode },
+        employee: { page: 'hr', label: 'Employee', name: values => `${values.firstname || ''} ${values.lastname || ''}`.trim() },
+        department: { page: 'hr', label: 'Department', name: values => values.deptname },
+        job: { page: 'hr', label: 'Job', name: values => values.jobdesc },
+        jobhistory: { page: 'hr', label: 'Job history', name: values => values.empno },
+        sales: { page: 'sales', label: 'Sales transaction', name: values => values.transno },
+        salesdetail: { page: 'sales', label: 'Sales detail', name: values => `${values.transno || ''} · ${values.prodcode || ''}` },
+        payment: { page: 'sales', label: 'Payment', name: values => values.orno }
+      };
+      return databaseCache.activity.flatMap(entry => {
+        const module = modules[entry.table_name];
+        if (!module || !canModule(module.page)) return [];
+        const record = entry.new_values || {};
+        const verb = { ADD: 'Created', EDIT: 'Updated', DELETE: 'Removed', RESTORE: 'Restored' }[entry.action];
+        if (!verb) return [];
+        const recordName = module.name(record) || entry.record_key || module.label;
+        const actor = entry.action_by === currentUser.id ? 'by you' : `by ${findUserById(entry.action_by)?.firstName || 'an administrator'}`;
+        return [{
+          page: module.page,
+          action: entry.action.toLowerCase(),
+          title: `${verb} ${module.label}`,
+          description: `${recordName} · ${actor}`,
+          date: new Date(entry.action_at)
+        }];
+      }).sort((a, b) => b.date - a.date);
     }
 
     function formatActivityDate(date) {
@@ -1858,6 +2432,7 @@
       add('hr', getDepts(), record => record.deptName, record => record.deptCode, record => `${record.deptCode} ${record.deptName}`, null, 'departments');
       add('sales', getSales(), record => record.transNo, record => record.salesDate, record => `${record.transNo} ${record.custNo} ${record.empNo} ${record.salesDate}`, null, 'sales');
       add('sales', getSDetails(), record => `${record.transNo} · ${record.prodCode}`, record => `Quantity ${record.quantity}`, record => `${record.transNo} ${record.prodCode} ${record.quantity}`, record => record.transNo, 'details');
+      add('sales', getPayments(), record => record.orNo, record => `Payment ${record.payDate} · $${Number(record.amount || 0).toFixed(2)}`, record => `${record.orNo} ${record.payDate} ${record.transNo || ''} ${record.amount}`, null, 'payments');
       add('users', getUsers(), record => `${record.firstName} ${record.lastName || ''}`.trim(), record => `${record.email} · ${record.role}`, record => `${record.firstName} ${record.lastName || ''} ${record.email} ${record.role}`);
 
       results.innerHTML = matches.length
@@ -1886,8 +2461,16 @@
           if (button.dataset.deleted === 'true') empFilter = 'all';
         }
       } else if (button.dataset.page === 'sales') {
-        salesSearch = button.dataset.query;
-        if (button.dataset.deleted === 'true') salesFilter = 'all';
+        if (button.dataset.section === 'payments') {
+          salesTab = 'payments';
+          paymentSearch = button.dataset.query;
+          paymentTransactionFilter = '';
+          if (button.dataset.deleted === 'true') paymentFilter = 'all';
+        } else {
+          salesTab = 'transactions';
+          salesSearch = button.dataset.query;
+          if (button.dataset.deleted === 'true') salesFilter = 'all';
+        }
       } else if (button.dataset.page === 'users') {
         userSearch = button.dataset.query;
       }
@@ -1928,11 +2511,22 @@
           .reduce((amount, detail) => amount + Number(detail.quantity || 0) * latestUnitPrice(detail.prodCode, sale.salesDate), 0);
       }, 0);
       const activeSalesWithValue = sales.filter(sale => saleDetails.some(detail => detail.transNo === sale.transNo));
+      const canCalculateSalesValue = can('products.view') && can('sales.detailView');
       const metrics = [];
       if (canModule('customers')) metrics.push({ label: 'Total Customers', value: customers.length, note: 'Active customer records', icon: 'customers', tone: 'mint' });
       if (canModule('products')) metrics.push({ label: 'Total Products', value: products.length, note: 'Active catalog items', icon: 'products', tone: 'green' });
       if (canModule('hr')) metrics.push({ label: 'Total Employees', value: employees.length, note: 'Current active employees', icon: 'hr', tone: 'cyan' });
-      if (canModule('sales')) metrics.push({ label: 'Total Sales', value: `$${totalSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, note: `Across ${activeSalesWithValue.length} sales with line items`, icon: 'sales', tone: 'lime' });
+      if (canModule('sales')) metrics.push({
+        label: 'Total Sales',
+        value: canCalculateSalesValue
+          ? `$${totalSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : String(sales.length),
+        note: canCalculateSalesValue
+          ? `Across ${activeSalesWithValue.length} sales with line items`
+          : 'Transaction count; amount requires product and sales-detail access',
+        icon: 'sales',
+        tone: 'lime'
+      });
 
       const overview = [
         { label: 'Customers', count: customers.length, permission: 'customers.view', color: '#19d5a1' },
@@ -1967,19 +2561,10 @@
       document.querySelector('.notification-indicator').hidden = activity.length === 0;
       const now = new Date();
       const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
-      const storageAvailable = (() => {
-        try {
-          window.localStorage.getItem('hope_erp_customers_v2');
-          return true;
-        } catch (error) {
-          return false;
-        }
-      })();
-
       area.innerHTML = `
         <section class="dashboard-heading" aria-label="Dashboard overview">
           <div><h1>${greeting}, ${escapeDashboardHtml(currentUser.firstName)}</h1><p>Here's what's happening with your business today.</p></div>
-          <div class="dashboard-meta"><span class="dashboard-date">${dashboardIcon('clock')}<time>${now.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</time></span><span class="dashboard-system ${storageAvailable ? '' : 'storage-limited'}"><i></i>${storageAvailable ? 'Browser storage available' : 'Memory-only session'}</span></div>
+          <div class="dashboard-meta"><span class="dashboard-date">${dashboardIcon('clock')}<time>${now.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}</time></span><span class="dashboard-system ${databaseConnected ? '' : 'storage-limited'}"><i></i>${databaseConnected ? 'Supabase connected' : 'Database unavailable'}</span></div>
         </section>
 
         <section class="stats-grid dashboard-stats" aria-label="Business summary">
@@ -2026,44 +2611,22 @@
     const DEFAULT_PRODUCTS = [];
     const DEFAULT_PRICES = [];
 
-    let memoryProducts = null;
-    let memoryPrices = null;
+    let memoryProducts = [];
+    let memoryPrices = [];
     let productFilter = 'active';
     let productSearch = '';
     let selectedProdCode = null;
     let priceFilter = 'active';
 
     function getProducts() {
-      try {
-        const stored = localStorage.getItem('hope_erp_products_v1');
-        if (stored) return JSON.parse(stored);
-        localStorage.setItem('hope_erp_products_v1', JSON.stringify(DEFAULT_PRODUCTS));
-        return [...DEFAULT_PRODUCTS];
-      } catch (e) {
-        if (!memoryProducts) memoryProducts = [...DEFAULT_PRODUCTS];
-        return memoryProducts;
-      }
+      return memoryProducts;
     }
-    function saveProducts(list) {
-      try { localStorage.setItem('hope_erp_products_v1', JSON.stringify(list)); }
-      catch (e) { memoryProducts = list; }
-    }
+    function saveProducts(list) { saveDatabaseCollection('products', list); }
 
     function getPrices() {
-      try {
-        const stored = localStorage.getItem('hope_erp_prices_v1');
-        if (stored) return JSON.parse(stored);
-        localStorage.setItem('hope_erp_prices_v1', JSON.stringify(DEFAULT_PRICES));
-        return [...DEFAULT_PRICES];
-      } catch (e) {
-        if (!memoryPrices) memoryPrices = [...DEFAULT_PRICES];
-        return memoryPrices;
-      }
+      return memoryPrices;
     }
-    function savePrices(list) {
-      try { localStorage.setItem('hope_erp_prices_v1', JSON.stringify(list)); }
-      catch (e) { memoryPrices = list; }
-    }
+    function savePrices(list) { saveDatabaseCollection('prices', list); }
 
     function priceKey(p) { return p.prodCode + '|' + p.effDate; }
 
@@ -2304,8 +2867,9 @@
       const prodCode = document.getElementById('prodCode').value.trim();
       const description = document.getElementById('prodDesc').value.trim();
       const unit = document.getElementById('prodUnit').value.trim();
-      if (!prodCode || !description || !unit) {
-        errorEl.textContent = 'All fields are required.';
+      if (!prodCode || prodCode.length > 6 || !description || description.length > 30
+          || !['pc', 'ea', 'mtr', 'pkg', 'ltr'].includes(unit)) {
+        errorEl.textContent = 'Enter a product code (up to 6 characters), description (up to 30), and a valid unit.';
         errorEl.classList.add('show');
         return;
       }
@@ -2393,8 +2957,8 @@
       const prodCode = document.getElementById('priceProdCode').value.trim();
       const effDate = document.getElementById('priceEffDate').value;
       const unitPrice = parseFloat(document.getElementById('priceUnitPrice').value);
-      if (!prodCode || !effDate || isNaN(unitPrice) || unitPrice < 0) {
-        errorEl.textContent = 'All fields are required. Price must be 0 or greater.';
+      if (!prodCode || !effDate || !Number.isFinite(unitPrice) || unitPrice <= 0 || unitPrice > 99999999.99) {
+        errorEl.textContent = 'Enter a product and effective date. Price must be greater than 0 and fit the database limit.';
         errorEl.classList.add('show');
         return;
       }
@@ -2466,41 +3030,29 @@
     const DEFAULT_EMPLOYEES = [];
     const DEFAULT_JOBHIST = [];
 
-    let memoryJobs = null, memoryDepts = null, memoryEmps = null, memoryJH = null;
+    let memoryJobs = { v: [] }, memoryDepts = { v: [] }, memoryEmps = { v: [] }, memoryJH = { v: [] };
     let hrTab = 'employees'; // employees | jobs | departments
     let empFilter = 'active', jobFilter = 'active', deptFilter = 'active', jhFilter = 'active';
     let empSearch = '', jobSearch = '', deptSearch = '';
     let selectedEmpNo = null;
 
-    function storeGet(key, def, memRef) {
-      try {
-        const s = localStorage.getItem(key);
-        if (s) return JSON.parse(s);
-        localStorage.setItem(key, JSON.stringify(def));
-        return [...def];
-      } catch (e) {
-        if (!memRef.v) memRef.v = [...def];
-        return memRef.v;
-      }
-    }
-    function storeSet(key, list, memRef) {
-      try { localStorage.setItem(key, JSON.stringify(list)); }
-      catch (e) { memRef.v = list; }
-    }
-    const _mJ = {}, _mD = {}, _mE = {}, _mH = {};
-    function getJobs() { return storeGet('hope_erp_jobs_v1', DEFAULT_JOBS, _mJ); }
-    function saveJobs(l) { storeSet('hope_erp_jobs_v1', l, _mJ); }
-    function getDepts() { return storeGet('hope_erp_depts_v1', DEFAULT_DEPTS, _mD); }
-    function saveDepts(l) { storeSet('hope_erp_depts_v1', l, _mD); }
-    function getEmployees() { return storeGet('hope_erp_emps_v1', DEFAULT_EMPLOYEES, _mE); }
-    function saveEmployees(l) { storeSet('hope_erp_emps_v1', l, _mE); }
-    function getJobHist() { return storeGet('hope_erp_jh_v1', DEFAULT_JOBHIST, _mH); }
-    function saveJobHist(l) { storeSet('hope_erp_jh_v1', l, _mH); }
+    const _mJ = { v: [] }, _mD = { v: [] }, _mE = { v: [] }, _mH = { v: [] };
+    function getJobs() { return _mJ.v; }
+    function saveJobs(l) { saveDatabaseCollection('jobs', l); }
+    function getDepts() { return _mD.v; }
+    function saveDepts(l) { saveDatabaseCollection('departments', l); }
+    function getEmployees() { return _mE.v; }
+    function saveEmployees(l) { saveDatabaseCollection('employees', l); }
+    function getJobHist() { return _mH.v; }
+    function saveJobHist(l) { saveDatabaseCollection('jobHistory', l); }
 
     function jhKey(h) { return h.empNo + '|' + h.jobCode + '|' + h.effDate; }
 
     function renderHR() {
       const area = document.getElementById('contentArea');
+      if (hrTab === 'employees') {
+        console.info('Employee array length when opening Employees module:', getEmployees().length);
+      }
       const tabs = `
         <div class="filter-tabs" style="margin-bottom:20px;">
           <button class="filter-tab ${hrTab==='employees'?'active':''}" onclick="hrTab='employees';renderHR()">Employees</button>
@@ -2526,6 +3078,7 @@
         const q = empSearch.toLowerCase();
         list = list.filter(e => e.empNo.toLowerCase().includes(q) || e.firstName.toLowerCase().includes(q) || e.lastName.toLowerCase().includes(q));
       }
+      console.info('Employee array length after filters:', list.length);
       const tA = getEmployees().filter(e => !e.isDeleted).length;
       const tD = getEmployees().filter(e => e.isDeleted).length;
       const tAll = getEmployees().length;
@@ -2564,6 +3117,7 @@
 
       // fix colspan - admin has 10 cols
       const realCols = canSeeDeleted ? 10 : 8;
+      console.info('Rendered employee data rows:', list.length);
 
       return `
         <div class="module-toolbar">
@@ -2622,8 +3176,12 @@
       const birthDate = document.getElementById('empBirth').value;
       const hireDate = document.getElementById('empHire').value;
       const sepDate = document.getElementById('empSep').value;
-      if (!empNo || !firstName || !lastName || !birthDate || !hireDate) {
-        err.textContent = 'Required fields missing.'; err.classList.add('show'); return;
+      if (!empNo || empNo.length > 5 || !firstName || firstName.length > 15
+          || !lastName || lastName.length > 15 || !['M', 'F'].includes(gender)
+          || !birthDate || !hireDate) {
+        err.textContent = 'Enter an employee number (up to 5 characters), first and last names (up to 15), valid gender, birth date, and hire date.';
+        err.classList.add('show');
+        return;
       }
       const list = getEmployees();
       if (editNo) {
@@ -2710,7 +3268,11 @@
       if (!can(edit ? 'hr.jobEdit' : 'hr.jobAdd')) return;
       const jobCode = document.getElementById('jobCode').value.trim();
       const jobDesc = document.getElementById('jobDesc').value.trim();
-      if (!jobCode || !jobDesc) { err.textContent = 'All fields required.'; err.classList.add('show'); return; }
+      if (!jobCode || jobCode.length > 4 || !jobDesc || jobDesc.length > 20) {
+        err.textContent = 'Enter a job code (up to 4 characters) and description (up to 20).';
+        err.classList.add('show');
+        return;
+      }
       const list = getJobs();
       if (edit) { const i = list.findIndex(x => x.jobCode === edit); if (i>=0) list[i] = {...list[i], jobDesc, stamp: makeStamp('EDITED')}; }
       else {
@@ -2749,8 +3311,10 @@
       let rows = list.length === 0 ? `<tr><td colspan="5"><div class="empty-state">No departments found.</div></td></tr>`
         : list.map(d => {
             let actions = d.isDeleted
-              ? (canRestore ? `<button class="btn-restore" onclick="restoreDept('${d.deptCode}')">Restore</button>` : '—')
-              : `${can('hr.deptEdit') ? `<button class="btn-edit" onclick="openEditDept('${d.deptCode}')">Edit</button>` : ''}
+              ? `${can('hr.jhView') ? `<button class="btn-edit" onclick='openDepartmentEmployees(${dashboardActionArgument(d.deptCode)})'>History</button>` : ''}
+                ${canRestore ? `<button class="btn-restore" onclick="restoreDept('${d.deptCode}')">Restore</button>` : ''}`
+              : `${can('hr.jhView') ? `<button class="btn-edit" onclick='openDepartmentEmployees(${dashboardActionArgument(d.deptCode)})'>History</button>` : ''}
+                 ${can('hr.deptEdit') ? `<button class="btn-edit" onclick="openEditDept('${d.deptCode}')">Edit</button>` : ''}
                  ${can('hr.deptDelete') ? `<button class="btn-del" onclick="softDeleteDept('${d.deptCode}')">Delete</button>` : ''}`;
             if (!actions.trim()) actions = '—';
             const ac = canSeeDeleted ? `<td>${d.isDeleted?'<span class="badge badge-deleted">Inactive</span>':'<span class="badge badge-active">Active</span>'}</td>
@@ -2769,6 +3333,40 @@
         ${can('hr.deptAdd') ? `<button class="btn btn-primary btn-sm" onclick="openAddDept()">+ Add Department</button>` : ''}</div></div>
         <div class="data-table-wrap"><table class="data-table"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div>`;
     }
+
+    function openDepartmentEmployees(deptCode) {
+      if (!can('hr.jhView')) return;
+      const department = getDepts().find(record => record.deptCode === deptCode);
+      if (!department) return;
+
+      const entries = getJobHist()
+        .filter(history => history.deptCode === deptCode && (can('hr.jhDelete') || !history.isDeleted))
+        .sort((a, b) => b.effDate.localeCompare(a.effDate));
+      const rows = entries.length
+        ? entries.map(history => {
+            const employee = getEmployees().find(record => record.empNo === history.empNo);
+            const job = getJobs().find(record => record.jobCode === history.jobCode);
+            return `<tr>
+              <td>${escapeDashboardHtml(employee ? `${employee.firstName} ${employee.lastName}` : history.empNo)} (${escapeDashboardHtml(history.empNo)})</td>
+              <td>${escapeDashboardHtml(job ? job.jobDesc : history.jobCode)} (${escapeDashboardHtml(history.jobCode)})</td>
+              <td>${escapeDashboardHtml(history.effDate)}</td>
+              <td>$${Number(history.salary || 0).toFixed(2)}</td>
+            </tr>`;
+          }).join('')
+        : '<tr><td colspan="4"><div class="empty-state">No job history is linked to this department.</div></td></tr>';
+
+      document.getElementById('departmentEmployeesTitle').textContent = `${department.deptName} — Employee History`;
+      document.getElementById('departmentEmployeesSub').textContent = 'Assignments are shown from the department links stored in jobhistory.';
+      document.getElementById('departmentEmployeesBody').innerHTML = rows;
+      document.getElementById('departmentEmployeesModal').classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeDepartmentEmployees() {
+      document.getElementById('departmentEmployeesModal').classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
     function openAddDept() {
       if (!can('hr.deptAdd')) return;
       document.getElementById('deptModalTitle').textContent = 'Add Department'; document.getElementById('deptSaveBtn').textContent = 'Save Department';
@@ -2791,7 +3389,11 @@
       if (!can(edit ? 'hr.deptEdit' : 'hr.deptAdd')) return;
       const deptCode = document.getElementById('deptCode').value.trim();
       const deptName = document.getElementById('deptName').value.trim();
-      if (!deptCode || !deptName) { err.textContent = 'All fields required.'; err.classList.add('show'); return; }
+      if (!deptCode || deptCode.length > 3 || !deptName || deptName.length > 20) {
+        err.textContent = 'Enter a department code (up to 3 characters) and name (up to 20).';
+        err.classList.add('show');
+        return;
+      }
       const list = getDepts();
       if (edit) { const i = list.findIndex(x => x.deptCode === edit); if (i>=0) list[i] = {...list[i], deptName, stamp: makeStamp('EDITED')}; }
       else {
@@ -2962,119 +3564,17 @@
     const DEFAULT_SALES = [];
     const DEFAULT_SDETAILS = [];
 
-    let _mS = {}, _mSD = {};
+    let _mS = { v: [] }, _mSD = { v: [] }, _mP = { v: [] };
     let salesFilter = 'active', salesSearch = '', selectedTransNo = null, sdFilter = 'active';
+    let salesTab = 'transactions', paymentFilter = 'active', paymentSearch = '', paymentTransactionFilter = '';
 
-    function getSales() { return storeGet('hope_erp_sales_v1', DEFAULT_SALES, _mS); }
-    function saveSales(l) { storeSet('hope_erp_sales_v1', l, _mS); }
-    function getSDetails() { return storeGet('hope_erp_sdetails_v1', DEFAULT_SDETAILS, _mSD); }
-    function saveSDetails(l) { storeSet('hope_erp_sdetails_v1', l, _mSD); }
+    function getSales() { return _mS.v; }
+    function saveSales(l) { saveDatabaseCollection('sales', l); }
+    function getSDetails() { return _mSD.v; }
+    function saveSDetails(l) { saveDatabaseCollection('saleDetails', l); }
+    function getPayments() { return _mP.v; }
+    function savePayments(l) { saveDatabaseCollection('payments', l); }
     function sdKey(d) { return d.transNo + '|' + d.prodCode; }
-
-    const LEGACY_DEMO_RECORDS = {
-      hope_erp_customers_v2: [
-        { custNo: 'C-001', custName: 'Acme Corporation' },
-        { custNo: 'C-002', custName: 'Globex Industries' },
-        { custNo: 'C-003', custName: 'Initech LLC' },
-        { custNo: 'C-004', custName: 'Umbrella Corp' },
-        { custNo: 'C-005', custName: 'Stark Enterprises' },
-      ],
-      hope_erp_products_v1: [
-        { prodCode: 'P-001', description: 'Industrial Widget A' },
-        { prodCode: 'P-002', description: 'Steel Bracket Heavy' },
-        { prodCode: 'P-003', description: 'Lubricant Oil 5L' },
-        { prodCode: 'P-004', description: 'Safety Gloves XL' },
-        { prodCode: 'P-005', description: 'Copper Wire 2.5mm' },
-      ],
-      hope_erp_prices_v1: [
-        { effDate: '2026-01-01', prodCode: 'P-001', unitPrice: 12.50 },
-        { effDate: '2026-06-01', prodCode: 'P-001', unitPrice: 13.75 },
-        { effDate: '2026-01-15', prodCode: 'P-002', unitPrice: 45.00 },
-        { effDate: '2026-03-01', prodCode: 'P-002', unitPrice: 48.50 },
-        { effDate: '2026-02-01', prodCode: 'P-003', unitPrice: 28.00 },
-        { effDate: '2026-04-01', prodCode: 'P-004', unitPrice: 8.50 },
-        { effDate: '2026-05-01', prodCode: 'P-005', unitPrice: 2.15 },
-        { effDate: '2026-09-01', prodCode: 'P-005', unitPrice: 2.35 },
-      ],
-      hope_erp_jobs_v1: [
-        { jobCode: 'J-001', jobDesc: 'Software Engineer' },
-        { jobCode: 'J-002', jobDesc: 'Sales Manager' },
-        { jobCode: 'J-003', jobDesc: 'HR Specialist' },
-        { jobCode: 'J-004', jobDesc: 'Accountant' },
-      ],
-      hope_erp_depts_v1: [
-        { deptCode: 'D-001', deptName: 'Engineering' },
-        { deptCode: 'D-002', deptName: 'Sales' },
-        { deptCode: 'D-003', deptName: 'Human Resources' },
-        { deptCode: 'D-004', deptName: 'Finance' },
-      ],
-      hope_erp_emps_v1: [
-        { empNo: 'E-001', firstName: 'Maria', lastName: 'Santos' },
-        { empNo: 'E-002', firstName: 'Juan', lastName: 'Reyes' },
-        { empNo: 'E-003', firstName: 'Ana', lastName: 'Cruz' },
-        { empNo: 'E-004', firstName: 'Pedro', lastName: 'Garcia' },
-      ],
-      hope_erp_jh_v1: [
-        { empNo: 'E-001', jobCode: 'J-001', effDate: '2020-03-01', salary: 45000 },
-        { empNo: 'E-001', jobCode: 'J-001', effDate: '2023-01-01', salary: 52000 },
-        { empNo: 'E-002', jobCode: 'J-002', effDate: '2019-07-15', salary: 55000 },
-        { empNo: 'E-003', jobCode: 'J-003', effDate: '2021-01-10', salary: 38000 },
-        { empNo: 'E-004', jobCode: 'J-004', effDate: '2018-05-01', salary: 42000 },
-      ],
-      hope_erp_sales_v1: [
-        { transNo: 'T-001', salesDate: '2026-10-01', custNo: 'C-001', empNo: 'E-002' },
-        { transNo: 'T-002', salesDate: '2026-10-05', custNo: 'C-002', empNo: 'E-001' },
-        { transNo: 'T-003', salesDate: '2026-10-08', custNo: 'C-003', empNo: 'E-002' },
-        { transNo: 'T-004', salesDate: '2026-09-20', custNo: 'C-005', empNo: 'E-003' },
-      ],
-      hope_erp_sdetails_v1: [
-        { transNo: 'T-001', prodCode: 'P-001', quantity: 10 },
-        { transNo: 'T-001', prodCode: 'P-002', quantity: 2 },
-        { transNo: 'T-002', prodCode: 'P-003', quantity: 5 },
-        { transNo: 'T-003', prodCode: 'P-001', quantity: 20 },
-        { transNo: 'T-003', prodCode: 'P-005', quantity: 100 },
-        { transNo: 'T-004', prodCode: 'P-002', quantity: 1 },
-      ],
-    };
-
-    function migrateLegacyDemoData() {
-      try {
-        const storedUsers = localStorage.getItem('hope_erp_users_v3');
-        if (storedUsers) {
-          const users = JSON.parse(storedUsers);
-          if (!Array.isArray(users)) throw new TypeError('Stored users must be an array.');
-          const remainingUsers = users.filter(user =>
-            !LEGACY_DEMO_ACCOUNT_EMAILS.has((user.email || '').toLowerCase())
-          );
-          if (remainingUsers.length !== users.length) {
-            localStorage.setItem('hope_erp_users_v3', JSON.stringify(remainingUsers));
-          }
-        }
-      } catch (error) {
-        console.error('Unable to remove legacy demo accounts:', error);
-      }
-
-      Object.entries(LEGACY_DEMO_RECORDS).forEach(([storageKey, fixtures]) => {
-        try {
-          const stored = localStorage.getItem(storageKey);
-          if (!stored) return;
-          const records = JSON.parse(stored);
-          if (!Array.isArray(records)) throw new TypeError(`${storageKey} must contain an array.`);
-          const remainingRecords = records.filter(record =>
-            !fixtures.some(fixture =>
-              Object.entries(fixture).every(([field, value]) => record[field] === value)
-            )
-          );
-          if (remainingRecords.length !== records.length) {
-            localStorage.setItem(storageKey, JSON.stringify(remainingRecords));
-          }
-        } catch (error) {
-          console.error(`Unable to remove legacy demo records from ${storageKey}:`, error);
-        }
-      });
-    }
-
-    migrateLegacyDemoData();
 
     function latestUnitPrice(prodCode, asOfDate) {
       let prices = getPrices().filter(p => p.prodCode === prodCode && !p.isDeleted);
@@ -3084,6 +3584,11 @@
     }
 
     function renderSales() {
+      if (salesTab === 'payments') {
+        renderPayments();
+        return;
+      }
+
       const area = document.getElementById('contentArea');
       const canSeeDeleted = can('sales.delete');
       const canRestore = canSeeDeleted;
@@ -3119,8 +3624,10 @@
         ? `<tr><td colspan="${colCount}"><div class="empty-state">No sales found.</div></td></tr>`
         : list.map(s => {
             let actions = s.isDeleted
-              ? (canRestore ? `<button class="btn-restore" onclick="restoreSale('${s.transNo}')">Restore</button>` : '—')
-              : `${can('sales.detailView') ? `<button class="btn-edit" onclick="openSalesDetails('${s.transNo}')">Details</button>` : ''}
+              ? `${can('sales.view') ? `<button class="btn-edit" onclick='openPaymentsForSale(${dashboardActionArgument(s.transNo)})'>Payments</button>` : ''}
+                ${canRestore ? `<button class="btn-restore" onclick="restoreSale('${s.transNo}')">Restore</button>` : ''}`
+              : `${can('sales.view') ? `<button class="btn-edit" onclick='openPaymentsForSale(${dashboardActionArgument(s.transNo)})'>Payments</button>` : ''}
+                 ${can('sales.detailView') ? `<button class="btn-edit" onclick="openSalesDetails('${s.transNo}')">Details</button>` : ''}
                  ${can('sales.edit') ? `<button class="btn-edit" onclick="openEditSale('${s.transNo}')">Edit</button>` : ''}
                  ${can('sales.delete') ? `<button class="btn-del" onclick="softDeleteSale('${s.transNo}')">Delete</button>` : ''}`;
             if (!actions.trim()) actions = '—';
@@ -3149,6 +3656,10 @@
         : '<th>Trans No</th><th>Sales Date</th><th>Customer</th><th>Employee</th><th>Total</th><th>Actions</th>';
 
       area.innerHTML = `
+        <div class="filter-tabs" style="margin-bottom:20px;">
+          <button class="filter-tab active" aria-current="page">Sales</button>
+          <button class="filter-tab" onclick="salesTab='payments';paymentTransactionFilter='';renderPayments()">Payments</button>
+        </div>
         <div class="module-toolbar">
           <h3>Sales Management</h3>
           <div class="toolbar-right">
@@ -3209,8 +3720,10 @@
       const salesDate = document.getElementById('salesDate').value;
       const custNo = document.getElementById('salesCustNo').value;
       const empNo = document.getElementById('salesEmpNo').value;
-      if (!transNo || !salesDate || !custNo || !empNo) {
-        err.textContent = 'All fields are required.'; err.classList.add('show'); return;
+      if (!transNo || transNo.length > 8 || !salesDate || !custNo || !empNo) {
+        err.textContent = 'Enter a transaction number (up to 8 characters), sales date, customer, and employee.';
+        err.classList.add('show');
+        return;
       }
       const list = getSales();
       if (editNo) {
@@ -3388,10 +3901,10 @@
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        closeSalesModal(); closeSdFormModal(); closeSdListModal();
+        closeSalesModal(); closePaymentModal(); closeSdFormModal(); closeSdListModal();
       }
     });
-    ['salesModal','sdFormModal','sdListModal'].forEach(id => {
+    ['salesModal','paymentModal','sdFormModal','sdListModal'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('click', (e) => { if (e.target === el) { el.classList.remove('active'); document.body.style.overflow = ''; } });
     });
@@ -3418,18 +3931,23 @@
 
     function renderReports() {
       const area = document.getElementById('contentArea');
-      const reports = [
-        { id: 'topCustomers', label: 'Top Customers', perm: 'reports.topCustomers' },
-        { id: 'productMaster', label: 'Product Master List', perm: 'reports.productMaster' },
-        { id: 'topProducts', label: 'Top Products', perm: 'reports.topProducts' },
-        { id: 'activeEmployees', label: 'Active Employees', perm: 'reports.activeEmployees' },
-        { id: 'allEmployees', label: 'All Employees', perm: 'reports.allEmployees' },
-        { id: 'empJobHistory', label: 'Employee Job History', perm: 'reports.empJobHistory' },
-        { id: 'topSales', label: 'Top Sales', perm: 'reports.topSales' },
+      const assignedReports = [
+        { id: 'topCustomers', label: 'Top Customers', perm: 'reports.topCustomers', readPermissions: ['customers.view', 'sales.view', 'sales.detailView', 'products.view'] },
+        { id: 'productMaster', label: 'Product Master List', perm: 'reports.productMaster', readPermissions: ['products.view'] },
+        { id: 'topProducts', label: 'Top Products', perm: 'reports.topProducts', readPermissions: ['products.view', 'sales.view', 'sales.detailView'] },
+        { id: 'activeEmployees', label: 'Active Employees', perm: 'reports.activeEmployees', readPermissions: ['hr.view'] },
+        { id: 'allEmployees', label: 'All Employees', perm: 'reports.allEmployees', readPermissions: ['hr.view'] },
+        { id: 'empJobHistory', label: 'Employee Job History', perm: 'reports.empJobHistory', readPermissions: ['hr.view', 'hr.jhView'] },
+        { id: 'topSales', label: 'Top Sales', perm: 'reports.topSales', readPermissions: ['sales.view', 'sales.detailView', 'customers.view', 'products.view', 'hr.view'] },
+        { id: 'payment', label: 'Payment Report', perm: 'reports.payment', readPermissions: ['sales.view'] },
       ].filter(r => can(r.perm));
+      const reports = assignedReports.filter(report => report.readPermissions.every(permission => can(permission)));
 
       if (!reports.length) {
-        area.innerHTML = '<div class="empty-state">No reports assigned to your account.</div>';
+        const message = assignedReports.length
+          ? 'Your assigned reports require read access to their source modules. Ask an administrator to review your module permissions.'
+          : 'No reports assigned to your account.';
+        area.innerHTML = `<div class="empty-state">${message}</div>`;
         return;
       }
       if (!reports.find(r => r.id === reportId)) reportId = reports[0].id;
@@ -3451,6 +3969,7 @@
         case 'allEmployees': body = reportAllEmployees(); break;
         case 'empJobHistory': body = reportEmpJobHistory(); break;
         case 'topSales': body = reportTopSales(); break;
+        case 'payment': body = reportPayment(); break;
         default: body = '<div class="empty-state">Select a report.</div>';
       }
       area.innerHTML = tabs + `<div class="report-print-area" id="reportPrintArea">${body}</div>`;
@@ -3747,13 +4266,43 @@
         </div>`;
     }
 
+    function reportPayment() {
+      const payments = getPayments()
+        .filter(payment => !payment.isDeleted)
+        .filter(payment => !rptDateFrom || payment.payDate >= rptDateFrom)
+        .filter(payment => !rptDateTo || payment.payDate <= rptDateTo)
+        .sort((a, b) => b.payDate.localeCompare(a.payDate) || b.orNo.localeCompare(a.orNo));
+      const total = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+      const rows = payments.length
+        ? payments.map(payment => `<tr>
+            <td><strong>${escapeDashboardHtml(payment.orNo)}</strong></td>
+            <td>${escapeDashboardHtml(payment.payDate)}</td>
+            <td>${escapeDashboardHtml(payment.transNo || '—')}</td>
+            <td><strong>$${Number(payment.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></td>
+          </tr>`).join('')
+        : '<tr><td colspan="4"><div class="empty-state">No payments for this period.</div></td></tr>';
+
+      return `
+        <div class="module-toolbar"><h3>Payments</h3></div>
+        ${reportDateFilters(false)}
+        <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:16px;">
+          ${payments.length} payment${payments.length === 1 ? '' : 's'} · Total $${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </p>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Receipt No.</th><th>Payment Date</th><th>Sales Transaction</th><th>Amount</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
     // ========== USER MANAGEMENT ==========
     let umRightsEmail = null;
     let umRightsDraft = null;
 
     function canManageUserAccount(user) {
       if (!currentUser || !user) return false;
-      if (currentUser.role === 'superadmin') return user.role !== 'superadmin';
+      if (currentUser.role === 'superadmin') return user.id !== currentUser.id;
       return currentUser.role === 'admin' && user.role === 'user';
     }
 
@@ -3791,12 +4340,13 @@
         ? '<tr><td colspan="6"><div class="empty-state">No users.</div></td></tr>'
         : list.map(u => {
             const isSelf = u.email.toLowerCase() === currentUser.email.toLowerCase();
+            const isDisapproved = u.status === 'disapproved';
             let actions = '';
             const canManageAccount = canManageUserAccount(u);
             const canEditUser = canManageAccount || (isSuper && isSelf);
             if (u.status === 'pending' && canManageAccount) {
-              actions += `<button class="btn-restore" onclick="umApprove('${u.email}')">Approve</button>`;
-              actions += `<button class="btn-del" onclick="umDisapprove('${u.email}')">Disapprove</button>`;
+              actions += `<button class="btn-restore" onclick="umApprove('${u.id}')">Approve</button>`;
+              actions += `<button class="btn-del" onclick="umDisapprove('${u.id}')">Disapprove</button>`;
             }
             if (canManageAccount && !isSelf) {
               if (u.status === 'blocked') {
@@ -3805,10 +4355,10 @@
                 actions += `<button class="btn-del" onclick="umSetStatus('${u.email}','blocked')">Block</button>`;
               }
             }
-            if (canManageAccount && (u.role === 'user' || (isSuper && u.role === 'admin'))) {
+            if (!isDisapproved && u.status !== 'pending' && canManageAccount && (u.role === 'user' || (isSuper && u.role === 'admin'))) {
               actions += `<button class="btn-edit" onclick="openUmRights('${u.email}')">Rights</button>`;
             }
-            if (canEditUser) {
+            if (u.status !== 'pending' && canEditUser) {
               actions += `<button class="btn-edit" onclick="openEditUmUser('${u.email}')">Edit</button>`;
             }
             if (!actions) actions = '—';
@@ -3855,7 +4405,7 @@
       document.getElementById('umEmail').readOnly = false;
       document.getElementById('umStatus').value = 'active';
       document.getElementById('umRole').innerHTML = isSuper
-        ? '<option value="user">User</option><option value="admin">Admin</option>'
+        ? '<option value="user">User</option><option value="admin">Admin</option><option value="superadmin">Super Admin</option>'
         : '<option value="user">User</option>';
       document.getElementById('umRole').disabled = false;
       document.getElementById('umStatus').disabled = false;
@@ -3878,7 +4428,7 @@
       document.getElementById('umStatus').value = u.status || 'active';
       if (isSuper) {
         document.getElementById('umRole').innerHTML =
-          '<option value="user">User</option><option value="admin">Admin</option>';
+          '<option value="user">User</option><option value="admin">Admin</option><option value="superadmin">Super Admin</option>';
         if (selfEditOnly) {
           document.getElementById('umRole').innerHTML = '<option value="superadmin">Super Admin</option>';
           document.getElementById('umRole').disabled = true;
@@ -3905,9 +4455,10 @@
       document.getElementById('umStatus').disabled = false;
       document.body.style.overflow = '';
     }
-    function saveUmUser(ev) {
+    async function saveUmUser(ev) {
       ev.preventDefault();
       const err = document.getElementById('umUserError'); err.classList.remove('show');
+      const saveButton = document.querySelector('#umUserForm button[type="submit"]');
       const editEmail = document.getElementById('umEditEmail').value;
       const firstName = document.getElementById('umFirst').value.trim();
       const lastName = document.getElementById('umLast').value.trim();
@@ -3917,67 +4468,117 @@
       if (!firstName || !lastName || !email) {
         err.textContent = 'All fields required.'; err.classList.add('show'); return;
       }
-      if (editEmail) {
-        const u = findUser(editEmail); if (!u) return;
-        const isSelf = u.email.toLowerCase() === currentUser.email.toLowerCase();
-        const selfEditOnly = currentUser.role === 'superadmin' && isSelf;
-        if (!canManageUserAccount(u) && !selfEditOnly) {
-          err.textContent = 'You cannot manage an account at or above your role.'; err.classList.add('show'); return;
-        }
-        const previousRole = u.role;
-        u.firstName = firstName;
-        u.lastName = lastName;
-        if (!selfEditOnly) {
-          if (currentUser.role === 'admin' && role !== 'user') {
-            err.textContent = 'Admin can only assign the User role.'; err.classList.add('show'); return;
+      saveButton.disabled = true;
+      try {
+        const client = await window.spotibaiSupabaseReady;
+        if (editEmail) {
+          const user = findUser(editEmail);
+          if (!user) throw new Error('The selected account could not be found.');
+          const isSelf = user.id === currentUser.id;
+          const selfEditOnly = currentUser.role === 'superadmin' && isSelf;
+          if (!canManageUserAccount(user) && !selfEditOnly) {
+            throw new Error('You cannot manage an account at or above your role.');
           }
-          if (currentUser.role === 'superadmin' && !['user', 'admin'].includes(role)) {
-            err.textContent = 'Superadmin accounts cannot be assigned or managed from User Management.'; err.classList.add('show'); return;
+          if (selfEditOnly) {
+            const { error } = await client.from('profiles')
+              .update({ first_name: firstName, last_name: lastName })
+              .eq('id', user.id);
+            if (error) throw error;
+            currentUser.firstName = firstName;
+            currentUser.lastName = lastName;
+            currentUser.name = `${firstName} ${lastName}`.trim();
+            await refreshUserProfiles(client);
+            updateUserInfo();
+          } else {
+            const previousRole = user.role;
+            if (currentUser.role === 'admin' && role !== 'user') {
+              throw new Error('Admin can only assign the User role.');
+            }
+            if (currentUser.role === 'superadmin' && !['user', 'admin', 'superadmin'].includes(role)) {
+              throw new Error('Invalid account role.');
+            }
+            user.firstName = firstName;
+            user.lastName = lastName;
+            user.status = status;
+            user.role = currentUser.role === 'superadmin' ? role : user.role;
+            if (user.role !== previousRole) {
+              user.perms = user.role === 'admin' || user.role === 'superadmin' ? fullPerms() : emptyPerms();
+            }
+            await saveManagedUser(user);
           }
-          u.status = status;
-          if (currentUser.role === 'superadmin') u.role = role;
-          if (u.role !== previousRole) {
-            if (u.role === 'admin') u.perms = fullPerms();
-            else if (previousRole !== 'user') u.perms = emptyPerms();
+        } else {
+          const allowedRoles = currentUser.role === 'superadmin' ? ['user', 'admin', 'superadmin'] : ['user'];
+          if (!allowedRoles.includes(role)) {
+            throw new Error(currentUser.role === 'superadmin'
+              ? 'Super Admin can invite Super Admin, Admin, or User accounts.'
+              : 'Admin can invite User accounts only.');
           }
+          if (findUser(email)) throw new Error('An account with this email already exists.');
+          const { error } = await client.functions.invoke('invite-user', {
+            body: {
+              email,
+              first_name: firstName,
+              last_name: lastName,
+              role,
+              status,
+              permissions: role === 'admin' || role === 'superadmin' ? fullPerms() : emptyPerms()
+            }
+          });
+          if (error) throw error;
+          await refreshUserProfiles(client);
         }
-        upsertUser(u);
-      } else {
-        const allowedRoles = currentUser.role === 'superadmin' ? ['user', 'admin'] : ['user'];
-        if (!allowedRoles.includes(role)) {
-          err.textContent = currentUser.role === 'superadmin'
-            ? 'Superadmin can create Admin or User accounts only.'
-            : 'Admin can only create User accounts.';
-          err.classList.add('show'); return;
-        }
-        if (findUser(email)) {
-          err.textContent = 'Email already exists.'; err.classList.add('show'); return;
-        }
-        const perms = (role === 'superadmin' || role === 'admin') ? fullPerms() : emptyPerms();
-        upsertUser({ email, firstName, lastName, role, status, perms });
+        closeUmUserModal();
+        renderUserManagement();
+        showBackendStatus(editEmail ? 'User account updated.' : 'Invitation sent.', 'success');
+      } catch (error) {
+        console.error('Unable to save managed user.', error);
+        err.textContent = error.message || 'Unable to save this user.';
+        err.classList.add('show');
+      } finally {
+        saveButton.disabled = false;
       }
-      closeUmUserModal();
-      renderUserManagement();
     }
-    function umApprove(email) {
-      const u = findUser(email); if (!u) return;
-      if (!canManageUserAccount(u)) return;
-      u.status = 'active';
-      if (!u.perms || Object.keys(u.perms).length === 0) u.perms = sampleUserPerms();
-      upsertUser(u); renderUserManagement();
+    async function changeManagedUser(email, changes) {
+      const user = findUser(email);
+      if (!user || !canManageUserAccount(user)) return;
+      try {
+        await saveManagedUser({ ...user, ...changes });
+        renderUserManagement();
+        showBackendStatus('User account updated.', 'success');
+      } catch (error) {
+        console.error('Unable to update user account.', error);
+        showBackendStatus(error.message || 'Unable to update this user.', 'error');
+      }
     }
-    function umDisapprove(email) {
-      const u = findUser(email); if (!u) return;
-      if (!canManageUserAccount(u)) return;
-      u.status = 'disapproved'; upsertUser(u); renderUserManagement();
+    async function reviewPendingApplicant(userId, status) {
+      const user = findUserById(userId);
+      if (!user || user.status !== 'pending' || !canManageUserAccount(user)) return;
+      try {
+        const client = await window.spotibaiSupabaseReady;
+        const { error } = await client.rpc('review_applicant', {
+          target_user_id: user.id,
+          new_status: status
+        });
+        if (error) throw error;
+        await refreshUserProfiles(client);
+        renderUserManagement();
+        showBackendStatus(status === 'active' ? 'Applicant approved.' : 'Applicant disapproved.', 'success');
+      } catch (error) {
+        console.error('Unable to review applicant.', error);
+        showBackendStatus(error.message || 'Unable to update this applicant.', 'error');
+      }
+    }
+    function umApprove(userId) {
+      return reviewPendingApplicant(userId, 'active');
+    }
+    function umDisapprove(userId) {
+      return reviewPendingApplicant(userId, 'disapproved');
     }
     function umSetStatus(email, status) {
-      const u = findUser(email); if (!u) return;
-      if (!canManageUserAccount(u)) return;
       if (email.toLowerCase() === currentUser.email.toLowerCase()) {
         alert('You cannot block your own account.'); return;
       }
-      u.status = status; upsertUser(u); renderUserManagement();
+      return changeManagedUser(email, { status });
     }
 
     function openUmRights(email) {
@@ -4039,18 +4640,23 @@
       g.items.forEach(k => umRightsDraft[k] = on);
       renderUmRightsForm();
     }
-    function saveUmRights() {
+    async function saveUmRights() {
       if (!umRightsEmail || !umRightsDraft) return;
-      const u = findUser(umRightsEmail); if (!u) return;
-      if (!canManageUserAccount(u) || !['user', 'admin'].includes(u.role) ||
-          (u.role === 'admin' && currentUser.role !== 'superadmin')) {
+      const user = findUser(umRightsEmail); if (!user) return;
+      if (!canManageUserAccount(user) || !['user', 'admin'].includes(user.role) ||
+          (user.role === 'admin' && currentUser.role !== 'superadmin')) {
         closeUmRightsModal();
         return;
       }
-      u.perms = { ...umRightsDraft };
-      upsertUser(u);
-      closeUmRightsModal();
-      renderUserManagement();
+      try {
+        await saveManagedUser({ ...user, perms: { ...umRightsDraft } });
+        closeUmRightsModal();
+        renderUserManagement();
+        showBackendStatus('User permissions updated.', 'success');
+      } catch (error) {
+        console.error('Unable to update user permissions.', error);
+        showBackendStatus(error.message || 'Unable to update permissions.', 'error');
+      }
     }
 
     document.getElementById('umUserModal').addEventListener('click', e => {
@@ -4081,49 +4687,323 @@
         </div>
       `;
     }
+
+    function openPaymentsForSale(transNo) {
+      salesTab = 'payments';
+      paymentTransactionFilter = transNo;
+      paymentSearch = '';
+      paymentFilter = 'active';
+      renderPayments();
+    }
+
+    function renderPayments() {
+      const area = document.getElementById('contentArea');
+      const canSeeDeleted = can('sales.delete');
+      let list = getPayments();
+      if (!canSeeDeleted) list = list.filter(payment => !payment.isDeleted);
+      else if (paymentFilter === 'active') list = list.filter(payment => !payment.isDeleted);
+      else if (paymentFilter === 'deleted') list = list.filter(payment => payment.isDeleted);
+      if (paymentTransactionFilter) {
+        list = list.filter(payment => payment.transNo === paymentTransactionFilter);
+      }
+      if (paymentSearch) {
+        const query = paymentSearch.toLowerCase();
+        list = list.filter(payment => {
+          const sale = getSales().find(record => record.transNo === payment.transNo);
+          const customer = sale && getCustomers().find(record => record.custNo === sale.custNo);
+          return `${payment.orNo} ${payment.payDate} ${payment.transNo || ''} ${customer?.custName || ''} ${payment.amount}`.toLowerCase().includes(query);
+        });
+      }
+
+      const total = getPayments().length;
+      const active = getPayments().filter(payment => !payment.isDeleted).length;
+      const deleted = getPayments().filter(payment => payment.isDeleted).length;
+      const rows = list.length
+        ? list.map(payment => {
+            const sale = getSales().find(record => record.transNo === payment.transNo);
+            const customer = sale && getCustomers().find(record => record.custNo === sale.custNo);
+            const transaction = payment.transNo
+              ? `${escapeDashboardHtml(payment.transNo)}${customer ? ` — ${escapeDashboardHtml(customer.custName)}` : ''}`
+              : '—';
+            const actions = payment.isDeleted
+              ? `<button class="btn-restore" onclick='restorePayment(${dashboardActionArgument(payment.orNo)})'>Restore</button>`
+              : `${can('sales.edit') ? `<button class="btn-edit" onclick='openEditPayment(${dashboardActionArgument(payment.orNo)})'>Edit</button>` : ''}
+                 ${can('sales.delete') ? `<button class="btn-del" onclick='softDeletePayment(${dashboardActionArgument(payment.orNo)})'>Delete</button>` : ''}`;
+            return `<tr class="${payment.isDeleted ? 'deleted-row' : ''}">
+              <td><strong>${escapeDashboardHtml(payment.orNo)}</strong></td>
+              <td>${escapeDashboardHtml(payment.payDate)}</td>
+              <td>$${Number(payment.amount || 0).toFixed(2)}</td>
+              <td>${transaction}</td>
+              ${canSeeDeleted ? `<td>${payment.isDeleted ? '<span class="badge badge-deleted">Inactive</span>' : '<span class="badge badge-active">Active</span>'}</td><td><div class="stamp-text">${escapeDashboardHtml(payment.stamp || '—')}</div></td>` : ''}
+              <td><div class="action-btns">${actions || '—'}</div></td>
+            </tr>`;
+          }).join('')
+        : `<tr><td colspan="${canSeeDeleted ? 7 : 5}"><div class="empty-state">No payments found.</div></td></tr>`;
+
+      const filters = canSeeDeleted ? `<div class="filter-tabs">
+        <button class="filter-tab ${paymentFilter === 'active' ? 'active' : ''}" onclick="paymentFilter='active';renderPayments()">Active (${active})</button>
+        <button class="filter-tab ${paymentFilter === 'deleted' ? 'active' : ''}" onclick="paymentFilter='deleted';renderPayments()">Inactive (${deleted})</button>
+        <button class="filter-tab ${paymentFilter === 'all' ? 'active' : ''}" onclick="paymentFilter='all';renderPayments()">All (${total})</button>
+      </div>` : '';
+      const headers = canSeeDeleted
+        ? '<th>Receipt No.</th><th>Payment Date</th><th>Amount</th><th>Sales Transaction / Customer</th><th>Status</th><th>Stamp</th><th>Actions</th>'
+        : '<th>Receipt No.</th><th>Payment Date</th><th>Amount</th><th>Sales Transaction / Customer</th><th>Actions</th>';
+      const transactionFilter = paymentTransactionFilter
+        ? `<button type="button" class="btn btn-secondary btn-sm" onclick="paymentTransactionFilter='';renderPayments()">Clear transaction filter (${escapeDashboardHtml(paymentTransactionFilter)})</button>`
+        : '';
+
+      area.innerHTML = `
+        <div class="filter-tabs" style="margin-bottom:20px;">
+          <button class="filter-tab" onclick="salesTab='transactions';renderSales()">Sales</button>
+          <button class="filter-tab active" aria-current="page">Payments</button>
+        </div>
+        <div class="module-toolbar">
+          <h3>Payment Management</h3>
+          <div class="toolbar-right">
+            ${filters}
+            ${transactionFilter}
+            <input type="text" class="search-input" placeholder="Search payments..." value="${escapeDashboardHtml(paymentSearch)}"
+              oninput="paymentSearch=this.value;renderPayments();" />
+            ${can('sales.add') ? '<button class="btn btn-primary btn-sm" onclick="openAddPayment()">+ Add Payment</button>' : ''}
+          </div>
+        </div>
+        <div class="data-table-wrap"><table class="data-table">
+          <thead><tr>${headers}</tr></thead><tbody>${rows}</tbody>
+        </table></div>`;
+    }
+
+    function fillPaymentSales(currentTransNo) {
+      const eligibleSales = getSales().filter(sale => !sale.isDeleted || sale.transNo === currentTransNo);
+      document.getElementById('paymentTransNo').innerHTML = `
+        <option value="">Not linked to a sale</option>
+        ${eligibleSales.map(sale => {
+          const customer = getCustomers().find(record => record.custNo === sale.custNo);
+          return `<option value="${escapeDashboardHtml(sale.transNo)}">${escapeDashboardHtml(sale.transNo)}${customer ? ` — ${escapeDashboardHtml(customer.custName)}` : ''}${sale.isDeleted ? ' (inactive)' : ''}</option>`;
+        }).join('')}`;
+    }
+
+    function openAddPayment() {
+      if (!can('sales.add')) return;
+      fillPaymentSales(paymentTransactionFilter);
+      document.getElementById('paymentModalTitle').textContent = 'Add Payment';
+      document.getElementById('paymentSaveBtn').textContent = 'Save Payment';
+      document.getElementById('paymentEditNo').value = '';
+      document.getElementById('paymentOrNo').value = '';
+      document.getElementById('paymentOrNo').readOnly = false;
+      document.getElementById('paymentDate').value = new Date().toISOString().slice(0, 10);
+      document.getElementById('paymentAmount').value = '';
+      document.getElementById('paymentTransNo').value = paymentTransactionFilter || '';
+      document.getElementById('paymentError').classList.remove('show');
+      document.getElementById('paymentModal').classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function openEditPayment(orNo) {
+      if (!can('sales.edit')) return;
+      const payment = getPayments().find(record => record.orNo === orNo);
+      if (!payment || payment.isDeleted) return;
+      fillPaymentSales(payment.transNo);
+      document.getElementById('paymentModalTitle').textContent = 'Edit Payment';
+      document.getElementById('paymentSaveBtn').textContent = 'Update Payment';
+      document.getElementById('paymentEditNo').value = payment.orNo;
+      document.getElementById('paymentOrNo').value = payment.orNo;
+      document.getElementById('paymentOrNo').readOnly = true;
+      document.getElementById('paymentDate').value = payment.payDate || '';
+      document.getElementById('paymentAmount').value = payment.amount ?? '';
+      document.getElementById('paymentTransNo').value = payment.transNo || '';
+      document.getElementById('paymentError').classList.remove('show');
+      document.getElementById('paymentModal').classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closePaymentModal() {
+      document.getElementById('paymentModal').classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    function savePayment(event) {
+      event.preventDefault();
+      const error = document.getElementById('paymentError');
+      error.classList.remove('show');
+      const editNo = document.getElementById('paymentEditNo').value;
+      if (!can(editNo ? 'sales.edit' : 'sales.add')) return;
+
+      const orNo = document.getElementById('paymentOrNo').value.trim();
+      const payDate = document.getElementById('paymentDate').value;
+      const amount = Number(document.getElementById('paymentAmount').value);
+      const transNo = document.getElementById('paymentTransNo').value || null;
+      if (!orNo || orNo.length > 8 || !payDate || !Number.isFinite(amount)
+          || amount < 0 || amount > 99999999.99 || Math.round(amount * 100) !== amount * 100) {
+        error.textContent = 'Enter a receipt number (up to 8 characters), payment date, and amount with up to 2 decimals.';
+        error.classList.add('show');
+        return;
+      }
+      if (transNo && !getSales().some(sale => sale.transNo === transNo)) {
+        error.textContent = 'Select an existing sales transaction.';
+        error.classList.add('show');
+        return;
+      }
+
+      const list = getPayments();
+      if (editNo) {
+        const index = list.findIndex(payment => payment.orNo === editNo);
+        if (index < 0) return;
+        list[index] = { ...list[index], payDate, amount, transNo, stamp: makeStamp('EDITED') };
+      } else {
+        if (list.some(payment => payment.orNo.toLowerCase() === orNo.toLowerCase())) {
+          error.textContent = 'Receipt No. already exists.';
+          error.classList.add('show');
+          return;
+        }
+        list.push({ orNo, payDate, amount, transNo, isDeleted: false, stamp: makeStamp('CREATED') });
+      }
+
+      savePayments(list);
+      closePaymentModal();
+      renderPayments();
+    }
+
+    async function softDeletePayment(orNo) {
+      if (!can('sales.delete')) return;
+      if (!await confirmSoftDelete('Mark this payment as inactive?')) return;
+      const list = getPayments();
+      const payment = list.find(record => record.orNo === orNo);
+      if (!payment) return;
+      payment.isDeleted = true;
+      payment.stamp = makeStamp('DELETED');
+      savePayments(list);
+      renderPayments();
+    }
+
+    function restorePayment(orNo) {
+      if (!can('sales.delete')) return;
+      const list = getPayments();
+      const payment = list.find(record => record.orNo === orNo);
+      if (!payment) return;
+      payment.isDeleted = false;
+      payment.stamp = makeStamp('RESTORED');
+      savePayments(list);
+      renderPayments();
+    }
   </script>
 
   <script>
-    (() => {
+    (async () => {
       const params = new URLSearchParams(window.location.search);
-      const mode = params.get('mode');
-      const email = (params.get('email') || '').trim();
-      const hasPassword = params.get('hasPassword') === 'true';
+      const requestedView = params.get('view');
       const loginUrl = new URL('../Login/Login.html', window.location.href);
       const redirectToLogin = message => {
         loginUrl.searchParams.set('mode', 'signin');
         loginUrl.searchParams.set('result', message);
         window.location.replace(loginUrl.href);
       };
-
-      if (mode === 'signin') {
-        if (!email || !hasPassword) {
-          redirectToLogin('Enter your email and password to sign in.');
+      let client;
+      try {
+        client = await window.spotibaiSupabaseReady;
+        const { data: sessionData, error: sessionError } = await client.auth.getSession();
+        if (sessionError) throw sessionError;
+        console.info('Dashboard session exists:', Boolean(sessionData.session));
+        console.info('Dashboard session user ID:', sessionData.session?.user?.id || null);
+        if (!sessionData.session) {
+          redirectToLogin(params.get('error_description') || params.get('error') || 'Sign in to access the dashboard.');
           return;
         }
-        document.getElementById('loginEmail').value = email;
-        document.getElementById('loginPassword').value = 'demo';
-        handleLogin({ preventDefault() {} });
-        if (document.getElementById('dashboard').style.display !== 'block') {
-          redirectToLogin(document.getElementById('loginError').textContent || 'Unable to sign in. Please try again.');
+
+        const { data: authUserData, error: authUserError } = await client.auth.getUser();
+        if (authUserError) throw authUserError;
+        const authUser = authUserData.user;
+        console.info('Dashboard authenticated user ID:', authUser?.id || null);
+        console.info('Dashboard session/authenticated user IDs match:', Boolean(authUser?.id && authUser.id === sessionData.session.user.id));
+        if (!authUser || authUser.id !== sessionData.session.user.id) {
+          throw new Error('Your authenticated user could not be verified. Sign in again.');
+        }
+
+        const profileLookupId = sessionData.session.user.id;
+        const profileSchema = 'public';
+        const profileTable = 'profiles';
+        const { data: profileRow, error: profileError } = await client.schema(profileSchema).from(profileTable)
+          .select('id,email,first_name,last_name,phone,role,account_status,permissions,avatar_path')
+          .eq('id', profileLookupId)
+          .maybeSingle();
+        const profileRowCount = profileRow ? 1 : 0;
+        console.info('Dashboard profile lookup filter ID:', profileLookupId);
+        console.info('Dashboard profile lookup schema:', profileSchema);
+        console.info('Dashboard profile lookup table:', profileTable);
+        console.info('Dashboard profile query uses expected public.profiles:', profileSchema === 'public' && profileTable === 'profiles');
+        console.info('Dashboard profile query returned data:', Boolean(profileRow));
+        console.info('Dashboard profile query returned row count:', profileRowCount);
+        console.info('Dashboard profile query error code:', profileError?.code || null);
+        console.info('Dashboard profile query error message:', profileError?.message || null);
+        if (profileError) {
+          console.error('Dashboard profile query failed with code:', profileError.code || 'unknown');
+          console.error('Dashboard profile query failed with message:', profileError.message || 'No database error message was provided.');
+          throw profileError;
+        }
+        if (!profileRow) {
+          console.error('Dashboard profile query returned no row for the authenticated user.');
+          throw new Error('Your account profile is not available. Contact an administrator.');
+        }
+        console.info('Dashboard profile ID matches authenticated user:', profileRow.id === sessionData.session.user.id);
+        console.info('Dashboard profile role exists:', typeof profileRow.role === 'string' && profileRow.role.length > 0);
+        console.info('Dashboard profile account status exists:', typeof profileRow.account_status === 'string' && profileRow.account_status.length > 0);
+        console.info('Dashboard expected profile fields present:', ['email', 'first_name', 'last_name', 'phone', 'permissions', 'avatar_path']
+          .every(field => Object.hasOwn(profileRow, field)));
+        if (profileRow.id !== sessionData.session.user.id
+            || !['superadmin', 'admin', 'user'].includes(profileRow.role)) {
+          throw new Error('Your account role could not be verified. Contact an administrator.');
+        }
+        if (profileRow.account_status !== 'active') {
+          const statusMessage = profileRow.account_status === 'pending'
+            ? 'Your account is pending administrator approval.'
+            : profileRow.account_status === 'blocked'
+              ? 'Your account is blocked. Contact an administrator.'
+              : 'Your registration was not approved.';
+          await client.auth.signOut();
+          redirectToLogin(statusMessage);
           return;
         }
-      } else {
-        openModal('login');
-      }
 
-      const view = params.get('view');
-      if (view && ['dashboard', 'customers', 'products', 'hr', 'sales', 'reports', 'users'].includes(view)) {
-        navigateTo(view);
-      }
-      if (params.get('action') === 'add') {
-        const actionLabels = {
-          customers: /add customer/i,
-          products: /add product/i,
-          sales: /new sale/i
+        const profile = profileFromDatabase(profileRow);
+        profile.email = authUser.email || profile.email;
+        currentUser = {
+          ...profile,
+          id: sessionData.session.user.id,
+          name: `${profile.firstName} ${profile.lastName}`.trim() || profile.email.split('@')[0],
+          avatarUrl: ''
         };
-        const addButton = [...document.querySelectorAll('#contentArea button')].find(button => actionLabels[view] && actionLabels[view].test(button.textContent.trim()));
-        if (addButton) addButton.click();
+        try {
+          currentUser.avatarUrl = await refreshProfileAvatar(client, currentUser.avatarPath);
+        } catch (avatarError) {
+          console.error('Unable to load the profile picture.', avatarError);
+          showBackendStatus(avatarError.message || 'Unable to load the profile picture.', 'error');
+        }
+
+        await loadDashboardData(client);
+        showDashboard();
+        client.auth.onAuthStateChange(event => {
+          if (event === 'SIGNED_OUT') {
+            window.location.replace('../Login/Login.html?mode=signin');
+          }
+        });
+
+        if (requestedView && ['dashboard', 'customers', 'products', 'hr', 'sales', 'reports', 'users'].includes(requestedView)) {
+          navigateTo(requestedView);
+        }
+        if (params.get('action') === 'add') {
+          const actionLabels = {
+            customers: /add customer/i,
+            products: /add product/i,
+            sales: /new sale/i
+          };
+          const addButton = [...document.querySelectorAll('#contentArea button')]
+            .find(button => actionLabels[requestedView] && actionLabels[requestedView].test(button.textContent.trim()));
+          if (addButton) addButton.click();
+        }
+      } catch (error) {
+        console.error('Dashboard initialization failed.', error);
+        document.getElementById('dashboardInitErrorMessage').textContent =
+          error.message || 'An unexpected error occurred. Please retry the dashboard.';
+        document.getElementById('dashboardInitError').hidden = false;
       }
     })();
   </script>
