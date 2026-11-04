@@ -1030,6 +1030,14 @@
     let avatarCropOffsetY = 0;
     let avatarCropDrag = null;
     let databaseConnected = false;
+    let realtimeChannel = null;
+    let realtimeRefreshTimer = null;
+    let realtimePendingTables = new Set();
+    let realtimeRefreshPromise = Promise.resolve();
+    let realtimeStopped = false;
+    let realtimeRenderPending = false;
+    let intentionalSignOut = false;
+    let forcedAuthRedirectMessage = '';
 
     function discardPendingAvatar() {
       activeAvatarFile = null;
@@ -1146,6 +1154,11 @@
       console.info('Dashboard business data load started.');
       await refreshUserProfiles(client);
 
+      await refreshBusinessData(client);
+      console.info('Dashboard business data load completed.');
+    }
+
+    async function refreshBusinessData(client) {
       for (const [name, definition] of Object.entries(DATABASE_TABLES)) {
         await fetchDatabaseTable(client, name, definition);
       }
@@ -1157,7 +1170,6 @@
       if (activityError) throw activityError;
       databaseCache.activity = activity;
       databaseConnected = true;
-      console.info('Dashboard business data load completed.');
     }
 
     async function refreshDashboardActivity(client) {
@@ -1167,6 +1179,204 @@
         .limit(50);
       if (error) throw error;
       databaseCache.activity = data;
+    }
+
+    function redirectToLogin(message) {
+      const loginUrl = new URL('../Login/Login.html', window.location.href);
+      loginUrl.searchParams.set('mode', 'signin');
+      if (message) loginUrl.searchParams.set('result', message);
+      window.location.replace(loginUrl.href);
+    }
+
+    function renderCurrentRealtimeView() {
+      if (!currentUser) return;
+      renderSidebar();
+      updateUserInfo();
+      const pageAllowed = activePage !== 'users' || ['superadmin', 'admin'].includes(currentUser.role);
+      const moduleAllowed = !['customers', 'products', 'hr', 'sales', 'reports'].includes(activePage)
+        || canModule(activePage);
+      if (!pageAllowed || !moduleAllowed) {
+        realtimeRenderPending = false;
+        document.querySelectorAll('.modal-overlay.active').forEach(modal => {
+          if (modal.id === 'confirmDeleteModal') closeDeleteConfirmation();
+          else if (modal.id === 'avatarCropModal') closeAvatarCrop();
+          else closeModal(modal.id.replace(/Modal$/, ''));
+        });
+        document.body.style.overflow = '';
+        navigateTo('dashboard');
+        return;
+      }
+      if (document.querySelector('.modal-overlay.active')) {
+        realtimeRenderPending = true;
+        return;
+      }
+      navigateTo(activePage);
+    }
+
+    const realtimeModalObserver = new MutationObserver(() => {
+      if (!realtimeRenderPending || document.querySelector('.modal-overlay.active')) return;
+      realtimeRenderPending = false;
+      window.requestAnimationFrame(() => {
+        if (!document.querySelector('.modal-overlay.active')) renderCurrentRealtimeView();
+      });
+    });
+    document.querySelectorAll('.modal-overlay').forEach(modal => {
+      realtimeModalObserver.observe(modal, { attributes: true, attributeFilter: ['class'] });
+    });
+
+    async function refreshRealtimeProfiles(client) {
+      await refreshUserProfiles(client);
+      const updatedProfile = findUserById(currentUser.id);
+      if (!updatedProfile || updatedProfile.status !== 'active') {
+        const status = updatedProfile?.status;
+        forcedAuthRedirectMessage = status === 'pending'
+          ? 'Your account is pending administrator approval.'
+          : status === 'blocked'
+            ? 'Your account is blocked. Contact an administrator.'
+            : 'Your account is no longer active. Contact an administrator.';
+        currentUser = null;
+        try {
+          const { error } = await client.auth.signOut();
+          if (error) throw error;
+        } catch (error) {
+          console.error('Unable to end a session after the account became inactive.', error);
+          showBackendStatus(error.message || 'Your account is no longer active.', 'error');
+        }
+        redirectToLogin(forcedAuthRedirectMessage);
+        return false;
+      }
+
+      const previousUser = currentUser;
+      const authorizationChanged = previousUser.role !== updatedProfile.role
+        || previousUser.status !== updatedProfile.status
+        || JSON.stringify(previousUser.perms) !== JSON.stringify(updatedProfile.perms);
+      currentUser = {
+        ...updatedProfile,
+        name: `${updatedProfile.firstName} ${updatedProfile.lastName}`.trim()
+          || updatedProfile.email.split('@')[0],
+        avatarUrl: previousUser.avatarUrl
+      };
+      if (previousUser.avatarPath !== updatedProfile.avatarPath) {
+        try {
+          currentUser.avatarUrl = await refreshProfileAvatar(client, currentUser.avatarPath);
+        } catch (error) {
+          console.error('Unable to refresh the profile picture after a profile update.', error);
+          showBackendStatus(error.message || 'Unable to refresh the profile picture.', 'error');
+        }
+      }
+
+      renderCurrentRealtimeView();
+      if (authorizationChanged) {
+        await configureRealtimeSubscriptions(client);
+        await refreshBusinessData(client);
+        renderCurrentRealtimeView();
+      } else if (activePage === 'users') {
+        renderUserManagement();
+      }
+      return true;
+    }
+
+    function queueRealtimeRefresh(client, tableName) {
+      realtimePendingTables.add(tableName);
+      window.clearTimeout(realtimeRefreshTimer);
+      realtimeRefreshTimer = window.setTimeout(() => {
+        const changedTables = realtimePendingTables;
+        realtimePendingTables = new Set();
+        realtimeRefreshPromise = realtimeRefreshPromise.then(async () => {
+          if (realtimeStopped) return;
+          try {
+            if (changedTables.has('profiles') && currentUser) {
+              const stillActive = await refreshRealtimeProfiles(client);
+              if (!stillActive) return;
+            }
+            const changedDataTables = [...changedTables].filter(name => DATABASE_TABLES[name]);
+            await Promise.all(changedDataTables.map(name =>
+              fetchDatabaseTable(client, name, DATABASE_TABLES[name])
+            ));
+            if (changedDataTables.length || changedTables.has('audit_log')) {
+              await refreshDashboardActivity(client);
+              renderCurrentRealtimeView();
+              const activityList = document.getElementById('activityHistoryList');
+              if (activityList && document.getElementById('activityModal').classList.contains('active')) {
+                activityList.innerHTML = renderActivityItems(
+                  getDashboardActivity(),
+                  'No activity recorded yet. Changes will appear here as records are updated.'
+                );
+              }
+            }
+          } catch (error) {
+            console.error('Unable to synchronize live database changes.', error);
+            showBackendStatus(error.message || 'Live updates could not be synchronized.', 'error');
+          }
+        });
+      }, 180);
+    }
+
+    async function configureRealtimeSubscriptions(client) {
+      realtimeStopped = false;
+      if (realtimeChannel) {
+        const previousChannel = realtimeChannel;
+        realtimeChannel = null;
+        await client.removeChannel(previousChannel);
+      }
+      if (realtimeStopped) return;
+
+      let channel = client.channel('spotibai-dashboard-live')
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'profiles'
+        }, () => queueRealtimeRefresh(client, 'profiles'))
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles'
+        }, () => queueRealtimeRefresh(client, 'profiles'))
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'audit_log'
+        }, () => queueRealtimeRefresh(client, 'audit_log'));
+
+      Object.entries(DATABASE_TABLES).forEach(([name, definition]) => {
+        if (!can(definition.permission)) return;
+        const handleChange = () => queueRealtimeRefresh(client, name);
+        channel = channel
+          .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: definition.table
+          }, handleChange)
+          .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: definition.table
+          }, handleChange);
+      });
+
+      realtimeChannel = channel;
+      channel.subscribe(status => {
+        if (realtimeChannel !== channel) return;
+        if (status === 'SUBSCRIBED') {
+          console.info('Supabase Realtime subscription connected.');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          console.error('Supabase Realtime subscription status:', status);
+          showBackendStatus('Live updates are temporarily unavailable. The dashboard remains usable.', 'error');
+        }
+      });
+    }
+
+    function stopRealtimeSubscriptions(client) {
+      realtimeStopped = true;
+      window.clearTimeout(realtimeRefreshTimer);
+      realtimePendingTables.clear();
+      if (realtimeChannel) {
+        const channel = realtimeChannel;
+        realtimeChannel = null;
+        client.removeChannel(channel).catch(error => {
+          console.error('Unable to remove the Supabase Realtime channel.', error);
+        });
+      }
     }
 
     async function saveManagedUser(user) {
@@ -1428,11 +1638,13 @@
       closeHeaderPopovers();
       try {
         const client = await window.spotibaiSupabaseReady;
+        intentionalSignOut = true;
         const { error } = await client.auth.signOut();
         if (error) throw error;
         currentUser = null;
         window.location.assign('../Homepage/index.html');
       } catch (error) {
+        intentionalSignOut = false;
         console.error('Sign out failed.', error);
         showBackendStatus(error.message || 'Unable to sign out. Please try again.', 'error');
       }
@@ -1966,6 +2178,7 @@
       if (page === 'users' && !['superadmin', 'admin'].includes(currentUser.role)) return;
       if (['customers', 'products', 'hr', 'sales', 'reports'].includes(page) && !canModule(page)) return;
 
+      realtimeRenderPending = false;
       activePage = page;
       document.getElementById('dashboard').classList.remove('mobile-nav-open');
       document.getElementById('dashboard').classList.toggle('dashboard-home-active', page === 'dashboard');
@@ -4980,11 +5193,17 @@
 
         await loadDashboardData(client);
         showDashboard();
-        client.auth.onAuthStateChange(event => {
+        const authState = client.auth.onAuthStateChange(event => {
           if (event === 'SIGNED_OUT') {
-            window.location.replace('../Login/Login.html?mode=signin');
+            stopRealtimeSubscriptions(client);
+            if (!intentionalSignOut) redirectToLogin(forcedAuthRedirectMessage);
           }
         });
+        window.addEventListener('pagehide', () => {
+          stopRealtimeSubscriptions(client);
+          authState.data.subscription.unsubscribe();
+        }, { once: true });
+        await configureRealtimeSubscriptions(client);
 
         if (requestedView && ['dashboard', 'customers', 'products', 'hr', 'sales', 'reports', 'users'].includes(requestedView)) {
           navigateTo(requestedView);

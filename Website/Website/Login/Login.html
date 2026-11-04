@@ -8,16 +8,9 @@
   <script>
     (function () {
       var requestedMode = new URLSearchParams(window.location.search).get('mode');
-      var mode = requestedMode === 'signup' || requestedMode === 'recovery' ? requestedMode : 'signin';
-      try {
-        if (requestedMode === 'signin' || requestedMode === 'signup' || requestedMode === 'recovery') {
-          var cleanUrl = new URL(window.location.href);
-          cleanUrl.searchParams.delete('mode');
-          window.history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
-        }
-      } catch (error) {
-        console.warn('Unable to apply the requested authentication mode.', error);
-      }
+      var mode = requestedMode === 'signup' || requestedMode === 'register'
+        ? 'signup'
+        : requestedMode === 'recovery' ? 'recovery' : 'signin';
       document.documentElement.dataset.authMode = mode;
       document.documentElement.dataset.authReady = 'false';
     })();
@@ -248,7 +241,46 @@
       var rememberMeStorageKey = 'spotibai-remember-me';
       var rememberedEmailStorageKey = 'spotibai-remembered-email';
       var modeTransitioning = false;
+      var modeTransitionTimer = null;
       var recoveryMode = document.documentElement.dataset.authMode === 'recovery';
+      var callbackUrl = new URL(window.location.href);
+      var confirmationCallback = callbackUrl.searchParams.get('auth') === 'confirmed';
+      var callbackErrorCode = callbackUrl.searchParams.get('error_code') || '';
+      var callbackErrorDescription = callbackUrl.searchParams.get('error_description')
+        || callbackUrl.searchParams.get('error') || '';
+      var confirmationSessionVerified = false;
+      function confirmationErrorMessage() {
+        if (callbackErrorCode === 'otp_expired' || /expired|invalid.*(link|token|otp)|already used/i.test(callbackErrorDescription)) {
+          return 'This confirmation link has expired, is invalid, or has already been used. Request a new confirmation email and try again.';
+        }
+        return callbackErrorDescription
+          ? 'Email confirmation could not be completed: ' + callbackErrorDescription
+          : 'Email confirmation could not be completed. Request a new confirmation email and try again.';
+      }
+
+      function clearAuthCallbackUrl() {
+        var cleanUrl = new URL(window.location.href);
+        ['auth', 'code', 'error', 'error_code', 'error_description', 'token_hash', 'type'].forEach(function (key) {
+          cleanUrl.searchParams.delete(key);
+        });
+        if (cleanUrl.hash) cleanUrl.hash = '';
+        window.history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search);
+      }
+
+      function modeFromUrl() {
+        var requested = new URLSearchParams(window.location.search).get('mode');
+        return requested === 'signup' || requested === 'register' || requested === 'recovery'
+          ? 'signup'
+          : 'signin';
+      }
+
+      function updateModeUrl(mode, replace) {
+        var nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set('mode', mode === 'signup' ? 'signup' : 'signin');
+        var nextAddress = nextUrl.pathname + nextUrl.search + nextUrl.hash;
+        if (nextAddress === window.location.pathname + window.location.search + window.location.hash) return;
+        window.history[replace ? 'replaceState' : 'pushState']({ authMode: mode }, '', nextAddress);
+      }
       function syncSigninCredentialFields() {
         signinForm.setAttribute('autocomplete', rememberMe.checked ? 'on' : 'off');
         var signinEmail = document.getElementById('signinEmail');
@@ -321,11 +353,17 @@
         });
       }
 
-      function setMode(mode) {
+      function setMode(mode, updateHistory) {
         if (mode !== 'signin' && mode !== 'signup') return;
-        if (modeTransitioning) return;
+        document.documentElement.dataset.authMode = mode;
         var showSignin = mode === 'signin';
+        if (updateHistory !== false) updateModeUrl(mode, false);
         if (auth.classList.contains('right-panel-active') === showSignin) return;
+        if (modeTransitionTimer !== null) {
+          window.clearTimeout(modeTransitionTimer);
+          modeTransitionTimer = null;
+        }
+        modeTransitioning = false;
         updateModeAccess(showSignin);
         clearErrors(signupForm);
         clearErrors(signinForm);
@@ -354,7 +392,8 @@
           window.requestAnimationFrame(function () {
             auth.classList.add(showSignin ? 'auth-exit-right' : 'auth-exit-left');
           });
-          window.setTimeout(function () {
+          modeTransitionTimer = window.setTimeout(function () {
+            modeTransitionTimer = null;
             modeTransitioning = false;
             auth.classList.add('auth-transition-settled');
             auth.classList.remove('auth-transitioning', 'auth-exit-left', 'auth-exit-right');
@@ -368,8 +407,11 @@
       document.querySelectorAll('[data-mode]').forEach(function (button) {
         button.addEventListener('click', function (event) {
           event.preventDefault();
-          setMode(button.dataset.mode);
+          setMode(button.dataset.mode, true);
         });
+      });
+      window.addEventListener('popstate', function () {
+        setMode(modeFromUrl(), false);
       });
 
       function setError(input, message) {
@@ -583,7 +625,7 @@
                   first_name: request.firstName,
                   last_name: request.lastName
                 },
-                emailRedirectTo: new URL('../Dashboard/Dashboard.html', window.location.href).href
+                emailRedirectTo: new URL('Login.html?mode=signin&auth=confirmed', window.location.href).href
               }
             });
           } else {
@@ -698,6 +740,22 @@
         if (recoveryMode) return;
         var sessionResult = await client.auth.getSession();
         if (sessionResult.error) throw sessionResult.error;
+        if (confirmationCallback) {
+          clearAuthCallbackUrl();
+          if (callbackErrorCode || callbackErrorDescription) {
+            signinStatus.textContent = confirmationErrorMessage();
+            return;
+          }
+          if (!sessionResult.data.session) {
+            signinStatus.textContent = confirmationErrorMessage();
+            return;
+          }
+          confirmationSessionVerified = true;
+          var signOutResult = await client.auth.signOut({ scope: 'local' });
+          if (signOutResult.error) throw signOutResult.error;
+          signinStatus.textContent = 'Email confirmed successfully. You can now sign in.';
+          return;
+        }
         if (sessionResult.data.session) {
           var profileResult = await client.from('profiles')
             .select('account_status')
@@ -717,7 +775,11 @@
         }
       }).catch(function (error) {
         console.error('Unable to restore the authentication session.', error);
-        signinStatus.textContent = error.message || 'Unable to connect to the authentication service.';
+        signinStatus.textContent = confirmationCallback
+          ? confirmationSessionVerified
+            ? 'Email confirmed, but the confirmation session could not be cleared. Sign out before signing in again.'
+            : confirmationErrorMessage()
+          : error.message || 'Unable to connect to the authentication service.';
       });
     })();
   </script>
