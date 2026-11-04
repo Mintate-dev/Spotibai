@@ -145,40 +145,10 @@
     (() => {
       const params = new URLSearchParams(window.location.search);
       const mode = params.get('mode');
-      if (mode === 'signin') {
-        window.location.replace('../Dashboard/Dashboard.html' + window.location.search);
-        return;
-      }
-      if (mode !== 'signup') return;
-
-      const email = (params.get('email') || '').trim().toLowerCase();
-      const name = (params.get('name') || '').trim();
+      if (mode !== 'signin' && mode !== 'signup') return;
       const loginUrl = new URL('../Login/Login.html', window.location.href);
-      const returnToLogin = message => {
-        loginUrl.searchParams.set('mode', 'signup');
-        loginUrl.searchParams.set('result', message);
-        window.location.replace(loginUrl.href);
-      };
-
-      try {
-        if (!name || !email) {
-          returnToLogin('Enter your name and email to register.');
-          return;
-        }
-        const users = JSON.parse(localStorage.getItem('hope_erp_users_v3') || '[]');
-        const demoEmails = ['superadmin@hope.com', 'ceo@hope.com'];
-        if (demoEmails.includes(email) || users.some(user => user.email.toLowerCase() === email)) {
-          returnToLogin('An account with this email already exists. Please sign in.');
-          return;
-        }
-        const nameParts = name.split(/\s+/);
-        users.push({ email, firstName: nameParts.shift(), lastName: nameParts.join(' '), role: 'user', status: 'pending', perms: {} });
-        localStorage.setItem('hope_erp_users_v3', JSON.stringify(users));
-        returnToLogin('Registration submitted. An admin must approve your account before you can sign in.');
-      } catch (error) {
-        console.error('Registration handoff failed:', error);
-        returnToLogin('Unable to continue. Please try again.');
-      }
+      loginUrl.searchParams.set('mode', mode);
+      window.location.replace(loginUrl.href);
     })();
   </script>
 </body>
