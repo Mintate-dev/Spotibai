@@ -1631,6 +1631,27 @@ body.dashboard-page .profile-avatar-edit svg {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+body.dashboard-page .profile-avatar-remove {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid rgb(153 196 175 / 24%);
+  border-radius: 9px;
+  background: transparent;
+  color: #b7cfc4;
+  font: inherit;
+  font-size: .72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+body.dashboard-page .profile-avatar-remove:hover:not(:disabled),
+body.dashboard-page .profile-avatar-remove:focus-visible {
+  border-color: rgb(0 217 155 / 58%);
+  color: #dffef4;
+}
+body.dashboard-page .profile-avatar-remove:disabled {
+  opacity: .48;
+  cursor: not-allowed;
+}
 body.dashboard-page .avatar-crop-overlay {
   z-index: 1300;
   display: flex;
