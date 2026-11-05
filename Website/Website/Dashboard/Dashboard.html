@@ -1945,6 +1945,7 @@
       removeButton.disabled = true;
       saveButton.textContent = activeAvatarFile ? 'Uploading…' : 'Saving…';
       let uploadedPath = null;
+      let uploadReturnedPath = null;
       let uploadCompleted = false;
       let profileUpdated = false;
       let cleanupUploadedAvatar = true;
@@ -1985,12 +1986,14 @@
             throw upload.error;
           }
           uploadCompleted = true;
+          uploadReturnedPath = upload.data?.path || null;
           console.info('Profile picture upload completed.', {
             bucket: 'avatars',
             destinationPath: uploadedPath,
-            returnedPath: upload.data?.path || null
+            returnedPath: uploadReturnedPath
           });
-          updates.avatar_path = uploadedPath;
+          updates.avatar_path = uploadReturnedPath || uploadedPath;
+          uploadedPath = updates.avatar_path;
         }
 
         const profileResult = await client.from('profiles')
@@ -2049,8 +2052,12 @@
           console.error('Profile update did not persist all requested fields.', {
             userId: authUser.id,
             destinationPath: uploadedPath,
+            uploadReturnedPath,
+            updateReturnedRow: Boolean(profileResult.data),
             fieldsNotSaved,
-            savedAvatarPath: refreshedProfileRow.avatar_path
+            expectedAvatarPath: uploadedPath,
+            savedAvatarPath: refreshedProfileRow.avatar_path,
+            savedProfileId: refreshedProfileRow.id
           });
           throw new Error(`These profile changes were not saved: ${fieldsNotSaved.join(', ')}.`);
         }
