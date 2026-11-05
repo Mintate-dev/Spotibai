@@ -7,34 +7,21 @@
   <title>Hope, Inc. ERP — Sign Up or Sign In</title>
   <script>
     (function () {
-      var mode = 'signin';
       var requestedMode = new URLSearchParams(window.location.search).get('mode');
-      if (requestedMode === 'signin' || requestedMode === 'signup') {
-        mode = requestedMode;
-      } else {
-        try {
-          var savedMode = localStorage.getItem('spotibai-auth-mode');
-          if (savedMode === 'signin' || savedMode === 'signup') {
-            mode = savedMode;
-          }
-        } catch (error) {
-          console.warn('Unable to restore the saved authentication mode.', error);
-        }
-      }
-      try {
-        if (requestedMode === 'signin' || requestedMode === 'signup') {
-          localStorage.setItem('spotibai-auth-mode', mode);
-          var cleanUrl = new URL(window.location.href);
-          cleanUrl.searchParams.delete('mode');
-          window.history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
-        }
-      } catch (error) {
-        console.warn('Unable to apply the requested authentication mode.', error);
-      }
+      var mode = requestedMode === 'signup' || requestedMode === 'register'
+        ? 'signup'
+        : requestedMode === 'recovery' ? 'recovery' : 'signin';
       document.documentElement.dataset.authMode = mode;
       document.documentElement.dataset.authReady = 'false';
     })();
   </script>
+  <script>
+    window.spotibaiSupabaseReady = new Promise((resolve, reject) => {
+      window.addEventListener('spotibai:supabase-ready', event => resolve(event.detail), { once: true });
+      window.addEventListener('spotibai:supabase-error', event => reject(event.detail), { once: true });
+    });
+  </script>
+  <script type="module" src="../scripts/supabase-bridge.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -75,16 +62,29 @@
               <h1>Create your account</h1>
               <p class="form-subtitle">Join Hope, Inc. ERP</p>
 
-              <div class="field">
-                <label for="signupName">Name</label>
-                <div class="input-wrap">
-                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="8" r="4"></circle>
-                    <path d="M5 21v-1a7 7 0 0 1 14 0v1"></path>
-                  </svg>
-                  <input id="signupName" name="name" type="text" autocomplete="name" placeholder="Your name" aria-describedby="signupNameError" />
+              <div class="name-fields" id="signupNameFields">
+                <div class="field">
+                  <label for="signupFirstName">First Name</label>
+                  <div class="input-wrap">
+                    <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="8" r="4"></circle>
+                      <path d="M5 21v-1a7 7 0 0 1 14 0v1"></path>
+                    </svg>
+                    <input id="signupFirstName" name="first_name" type="text" autocomplete="given-name" placeholder="First name" aria-describedby="signupFirstNameError" required />
+                  </div>
+                  <p class="field-error" id="signupFirstNameError"></p>
                 </div>
-                <p class="field-error" id="signupNameError"></p>
+                <div class="field">
+                  <label for="signupLastName">Last Name</label>
+                  <div class="input-wrap">
+                    <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="8" r="4"></circle>
+                      <path d="M5 21v-1a7 7 0 0 1 14 0v1"></path>
+                    </svg>
+                    <input id="signupLastName" name="last_name" type="text" autocomplete="family-name" placeholder="Last name" aria-describedby="signupLastNameError" required />
+                  </div>
+                  <p class="field-error" id="signupLastNameError"></p>
+                </div>
               </div>
 
               <div class="field">
@@ -153,7 +153,7 @@
           </section>
 
           <section class="form-panel signin-panel" id="signinPanel" aria-label="Sign in" aria-hidden="true" inert>
-            <form id="signinForm" novalidate>
+            <form id="signinForm" autocomplete="off" novalidate>
               <h1>Welcome back</h1>
               <p class="form-subtitle">Sign in to your Hope, Inc. ERP account</p>
 
@@ -164,7 +164,7 @@
                     <rect x="3" y="5" width="18" height="14" rx="2"></rect>
                     <path d="m3 7 9 6 9-6"></path>
                   </svg>
-                  <input id="signinEmail" name="email" type="email" autocomplete="email" placeholder="you@example.com" aria-describedby="signinEmailError" />
+                  <input id="signinEmail" name="email" type="email" autocomplete="off" placeholder="you@example.com" aria-describedby="signinEmailError" />
                 </div>
                 <p class="field-error" id="signinEmailError"></p>
               </div>
@@ -176,7 +176,7 @@
                     <rect x="4" y="10" width="16" height="11" rx="2"></rect>
                     <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
                   </svg>
-                  <input id="signinPassword" name="password" type="password" autocomplete="current-password" placeholder="Your password" aria-describedby="signinPasswordError" />
+                  <input id="signinPassword" name="password" type="password" autocomplete="new-password" placeholder="Your password" aria-describedby="signinPasswordError" />
                   <button class="password-toggle hidden" id="toggleSigninPassword" type="button" aria-label="Show password" aria-pressed="false">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path d="M3 3l18 18"></path>
@@ -227,6 +227,8 @@
       var signinPanel = document.querySelector('.signin-panel');
       var signupForm = document.getElementById('signupForm');
       var signinForm = document.getElementById('signinForm');
+      var signupFirstName = document.getElementById('signupFirstName');
+      var signupLastName = document.getElementById('signupLastName');
       var signupPassword = document.getElementById('signupPassword');
       var signinPassword = document.getElementById('signinPassword');
       var signupConfirmPassword = document.getElementById('signupConfirmPassword');
@@ -235,13 +237,93 @@
       var passwordRulesList = document.getElementById('passwordRules');
       var signupStatus = document.getElementById('signupStatus');
       var signinStatus = document.getElementById('signinStatus');
+      var rememberMe = document.getElementById('rememberMe');
+      var rememberMeStorageKey = 'spotibai-remember-me';
+      var rememberedEmailStorageKey = 'spotibai-remembered-email';
       var modeTransitioning = false;
+      var modeTransitionTimer = null;
+      var recoveryMode = document.documentElement.dataset.authMode === 'recovery';
+      var callbackUrl = new URL(window.location.href);
+      var confirmationCallback = callbackUrl.searchParams.get('auth') === 'confirmed';
+      var callbackErrorCode = callbackUrl.searchParams.get('error_code') || '';
+      var callbackErrorDescription = callbackUrl.searchParams.get('error_description')
+        || callbackUrl.searchParams.get('error') || '';
+      var confirmationSessionVerified = false;
+      function confirmationErrorMessage() {
+        if (callbackErrorCode === 'otp_expired' || /expired|invalid.*(link|token|otp)|already used/i.test(callbackErrorDescription)) {
+          return 'This confirmation link has expired, is invalid, or has already been used. Request a new confirmation email and try again.';
+        }
+        return callbackErrorDescription
+          ? 'Email confirmation could not be completed: ' + callbackErrorDescription
+          : 'Email confirmation could not be completed. Request a new confirmation email and try again.';
+      }
+
+      function clearAuthCallbackUrl() {
+        var cleanUrl = new URL(window.location.href);
+        ['auth', 'code', 'error', 'error_code', 'error_description', 'token_hash', 'type'].forEach(function (key) {
+          cleanUrl.searchParams.delete(key);
+        });
+        if (cleanUrl.hash) cleanUrl.hash = '';
+        window.history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search);
+      }
+
+      function modeFromUrl() {
+        var requested = new URLSearchParams(window.location.search).get('mode');
+        return requested === 'signup' || requested === 'register' || requested === 'recovery'
+          ? 'signup'
+          : 'signin';
+      }
+
+      function updateModeUrl(mode, replace) {
+        var nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set('mode', mode === 'signup' ? 'signup' : 'signin');
+        var nextAddress = nextUrl.pathname + nextUrl.search + nextUrl.hash;
+        if (nextAddress === window.location.pathname + window.location.search + window.location.hash) return;
+        window.history[replace ? 'replaceState' : 'pushState']({ authMode: mode }, '', nextAddress);
+      }
+      function syncSigninCredentialFields() {
+        signinForm.setAttribute('autocomplete', rememberMe.checked ? 'on' : 'off');
+        var signinEmail = document.getElementById('signinEmail');
+        signinEmail.setAttribute('autocomplete', rememberMe.checked ? 'username' : 'off');
+        signinPassword.setAttribute('autocomplete', rememberMe.checked ? 'current-password' : 'new-password');
+      }
+      try {
+        rememberMe.checked = window.localStorage.getItem(rememberMeStorageKey) === 'true';
+        document.getElementById('signinEmail').value = rememberMe.checked
+          ? window.localStorage.getItem(rememberedEmailStorageKey) || ''
+          : '';
+        signinPassword.value = '';
+      } catch (error) {
+        console.warn('Unable to restore the Remember me preference.', error);
+        document.getElementById('signinEmail').value = '';
+        signinPassword.value = '';
+      }
+      syncSigninCredentialFields();
+      rememberMe.addEventListener('change', function () {
+        try {
+          window.localStorage.setItem(rememberMeStorageKey, String(rememberMe.checked));
+          if (!rememberMe.checked) {
+            window.localStorage.removeItem(rememberedEmailStorageKey);
+          }
+        } catch (error) {
+          console.warn('Unable to save the Remember me preference.', error);
+        }
+        syncSigninCredentialFields();
+      });
       var authUrl = new URL(window.location.href);
       var authResult = authUrl.searchParams.get('result');
+      var oauthError = authUrl.searchParams.get('error_description') || authUrl.searchParams.get('error');
       if (authResult) {
         var resultMode = document.documentElement.dataset.authMode === 'signup' ? signupStatus : signinStatus;
         resultMode.textContent = authResult;
         authUrl.searchParams.delete('result');
+        window.history.replaceState(null, '', authUrl.pathname + authUrl.search + authUrl.hash);
+      }
+      if (oauthError) {
+        signinStatus.textContent = oauthError;
+        ['error', 'error_code', 'error_description'].forEach(function (key) {
+          authUrl.searchParams.delete(key);
+        });
         window.history.replaceState(null, '', authUrl.pathname + authUrl.search + authUrl.hash);
       }
 
@@ -271,11 +353,17 @@
         });
       }
 
-      function setMode(mode) {
+      function setMode(mode, updateHistory) {
         if (mode !== 'signin' && mode !== 'signup') return;
-        if (modeTransitioning) return;
+        document.documentElement.dataset.authMode = mode;
         var showSignin = mode === 'signin';
+        if (updateHistory !== false) updateModeUrl(mode, false);
         if (auth.classList.contains('right-panel-active') === showSignin) return;
+        if (modeTransitionTimer !== null) {
+          window.clearTimeout(modeTransitionTimer);
+          modeTransitionTimer = null;
+        }
+        modeTransitioning = false;
         updateModeAccess(showSignin);
         clearErrors(signupForm);
         clearErrors(signinForm);
@@ -304,7 +392,8 @@
           window.requestAnimationFrame(function () {
             auth.classList.add(showSignin ? 'auth-exit-right' : 'auth-exit-left');
           });
-          window.setTimeout(function () {
+          modeTransitionTimer = window.setTimeout(function () {
+            modeTransitionTimer = null;
             modeTransitioning = false;
             auth.classList.add('auth-transition-settled');
             auth.classList.remove('auth-transitioning', 'auth-exit-left', 'auth-exit-right');
@@ -313,18 +402,16 @@
           auth.classList.add('auth-transition-settled');
           auth.classList.remove('auth-transitioning', 'auth-exit-left', 'auth-exit-right');
         }
-        try {
-          localStorage.setItem('spotibai-auth-mode', mode);
-        } catch (error) {
-          console.warn('Unable to save the selected authentication mode.', error);
-        }
       }
 
       document.querySelectorAll('[data-mode]').forEach(function (button) {
         button.addEventListener('click', function (event) {
           event.preventDefault();
-          setMode(button.dataset.mode);
+          setMode(button.dataset.mode, true);
         });
+      });
+      window.addEventListener('popstate', function () {
+        setMode(modeFromUrl(), false);
       });
 
       function setError(input, message) {
@@ -449,18 +536,21 @@
         clearErrors(signupForm);
         signupStatus.textContent = '';
         var valid = true;
-        var name = document.getElementById('signupName');
         var email = document.getElementById('signupEmail');
         var rules = getPasswordRules(signupPassword.value);
 
-        if (!name.value.trim()) {
-          setError(name, 'Please enter your name.');
+        if (!recoveryMode && !signupFirstName.value.trim()) {
+          setError(signupFirstName, 'Please enter your first name.');
           valid = false;
         }
-        if (!email.value.trim()) {
+        if (!recoveryMode && !signupLastName.value.trim()) {
+          setError(signupLastName, 'Please enter your last name.');
+          valid = false;
+        }
+        if (!recoveryMode && !email.value.trim()) {
           setError(email, 'Please enter your email address.');
           valid = false;
-        } else if (!isValidEmail(email.value.trim())) {
+        } else if (!recoveryMode && !isValidEmail(email.value.trim())) {
           setError(email, 'Please enter a valid email address.');
           valid = false;
         }
@@ -479,10 +569,16 @@
           valid = false;
         }
         if (valid) {
-          submitAuthRequest('signup', {
-            name: name.value.trim(),
-            email: email.value.trim()
-          });
+          if (recoveryMode) {
+            updateRecoveredPassword();
+          } else {
+            submitAuthRequest('signup', {
+              firstName: signupFirstName.value.trim(),
+              lastName: signupLastName.value.trim(),
+              email: email.value.trim(),
+              password: signupPassword.value
+            });
+          }
         }
       });
 
@@ -507,44 +603,184 @@
         if (valid) {
           submitAuthRequest('signin', {
             email: email.value.trim(),
-            hasPassword: true
+            password: signinPassword.value
           });
         }
       });
 
-      function submitAuthRequest(mode, request) {
+      async function submitAuthRequest(mode, request) {
+        var status = mode === 'signup' ? signupStatus : signinStatus;
+        var submitButton = (mode === 'signup' ? signupForm : signinForm).querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        status.textContent = mode === 'signup' ? 'Creating your account…' : 'Signing in…';
         try {
-          var destination = mode === 'signin' ? '../Dashboard/Dashboard.html' : '../Homepage/index.html';
-          var target = new URL(destination, window.location.href);
-          target.searchParams.set('mode', mode);
-          Object.keys(request).forEach(function (key) {
-            target.searchParams.set(key, String(request[key]));
-          });
-          window.location.assign(target.href);
+          var client = await window.spotibaiSupabaseReady;
+          var result;
+          if (mode === 'signup') {
+            result = await client.auth.signUp({
+              email: request.email,
+              password: request.password,
+              options: {
+                data: {
+                  first_name: request.firstName,
+                  last_name: request.lastName
+                },
+                emailRedirectTo: new URL('Login.html?mode=signin&auth=confirmed', window.location.href).href
+              }
+            });
+          } else {
+            result = await client.auth.signInWithPassword({
+              email: request.email,
+              password: request.password
+            });
+          }
+
+          if (result.error) throw result.error;
+          if (mode === 'signin') {
+            try {
+              if (rememberMe.checked) {
+                window.localStorage.setItem(rememberedEmailStorageKey, request.email);
+              } else {
+                window.localStorage.removeItem(rememberedEmailStorageKey);
+              }
+            } catch (storageError) {
+              console.warn('Unable to save the Remember me email preference.', storageError);
+            }
+          }
+          if (mode === 'signup' && !result.data.session) {
+            status.textContent = 'Account created. Check your email to confirm your address before signing in.';
+            submitButton.disabled = false;
+            return;
+          }
+          window.location.assign('../Dashboard/Dashboard.html');
         } catch (error) {
-          console.error('Unable to continue to Hope, Inc. ERP.', error);
-          (mode === 'signup' ? signupStatus : signinStatus).textContent = 'Unable to continue. Please try again.';
+          console.error('Supabase authentication failed.', error);
+          status.textContent = error.message || 'Unable to authenticate. Please try again.';
+          submitButton.disabled = false;
+        }
+      }
+
+      async function updateRecoveredPassword() {
+        signupStatus.textContent = 'Updating your password…';
+        var submitButton = signupForm.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        try {
+          var client = await window.spotibaiSupabaseReady;
+          var result = await client.auth.updateUser({ password: signupPassword.value });
+          if (result.error) throw result.error;
+          await client.auth.signOut();
+          window.location.replace('Login.html?mode=signin');
+        } catch (error) {
+          console.error('Password recovery failed.', error);
+          signupStatus.textContent = error.message || 'Unable to update your password. Request a new recovery link.';
+          submitButton.disabled = false;
         }
       }
 
       document.querySelectorAll('.social-button').forEach(function (button) {
-        button.addEventListener('click', function () {
+        button.addEventListener('click', async function () {
           var activeStatus = auth.classList.contains('right-panel-active') ? signinStatus : signupStatus;
-          activeStatus.textContent = button.dataset.provider + ' authentication is not connected yet.';
+          button.disabled = true;
+          activeStatus.textContent = 'Connecting to Google…';
+          try {
+            var client = await window.spotibaiSupabaseReady;
+            var redirectTo = new URL('Login.html', window.location.href).href;
+            var oauthResult = await client.auth.signInWithOAuth({
+              provider: 'google',
+              options: { redirectTo: redirectTo, skipBrowserRedirect: true }
+            });
+            if (oauthResult.error) throw oauthResult.error;
+            if (!oauthResult.data.url) throw new Error('Google sign-in did not return an authorization URL.');
+            window.location.assign(oauthResult.data.url);
+          } catch (error) {
+            console.error('Google authentication failed.', error);
+            activeStatus.textContent = error.message || 'Unable to start Google sign-in. Please try again.';
+            button.disabled = false;
+          }
         });
       });
 
-      document.getElementById('forgotPassword').addEventListener('click', function (event) {
+      document.getElementById('forgotPassword').addEventListener('click', async function (event) {
         event.preventDefault();
-        signinStatus.textContent = 'Password reset is a demo placeholder and is not connected yet.';
+        var email = document.getElementById('signinEmail').value.trim();
+        if (!isValidEmail(email)) {
+          setError(document.getElementById('signinEmail'), 'Enter a valid email address to receive a reset link.');
+          return;
+        }
+        signinStatus.textContent = 'Sending password recovery email…';
+        try {
+          var client = await window.spotibaiSupabaseReady;
+          var redirectTo = new URL('Login.html?mode=recovery', window.location.href).href;
+          var result = await client.auth.resetPasswordForEmail(email, { redirectTo: redirectTo });
+          if (result.error) throw result.error;
+          signinStatus.textContent = 'If an account exists for that email, a recovery link has been sent.';
+        } catch (error) {
+          console.error('Password recovery request failed.', error);
+          signinStatus.textContent = error.message || 'Unable to send a recovery email. Please try again.';
+        }
       });
 
       var initialMode = document.documentElement.dataset.authMode;
-      var showSignin = initialMode !== 'signup';
+      var showSignin = initialMode !== 'signup' && initialMode !== 'recovery';
+      if (recoveryMode) {
+        document.querySelector('.signup-panel h1').textContent = 'Choose a new password';
+        document.querySelector('.signup-panel .form-subtitle').textContent = 'Set a new password for your account';
+        document.getElementById('signupNameFields').hidden = true;
+        document.getElementById('signupEmail').closest('.field').hidden = true;
+        document.querySelector('.signup-panel .btn-primary').textContent = 'Update Password';
+        document.querySelector('.signup-panel .divider').hidden = true;
+        document.querySelector('.signup-panel .social-buttons').hidden = true;
+      }
       auth.classList.add('auth-restoring');
       updateModeAccess(showSignin);
       auth.classList.toggle('right-panel-active', showSignin);
       document.documentElement.dataset.authReady = 'true';
+
+      window.spotibaiSupabaseReady.then(async function (client) {
+        if (recoveryMode) return;
+        var sessionResult = await client.auth.getSession();
+        if (sessionResult.error) throw sessionResult.error;
+        if (confirmationCallback) {
+          clearAuthCallbackUrl();
+          if (callbackErrorCode || callbackErrorDescription) {
+            signinStatus.textContent = confirmationErrorMessage();
+            return;
+          }
+          if (!sessionResult.data.session) {
+            signinStatus.textContent = confirmationErrorMessage();
+            return;
+          }
+          confirmationSessionVerified = true;
+          var signOutResult = await client.auth.signOut({ scope: 'local' });
+          if (signOutResult.error) throw signOutResult.error;
+          signinStatus.textContent = 'Email confirmed successfully. You can now sign in.';
+          return;
+        }
+        if (sessionResult.data.session) {
+          var profileResult = await client.from('profiles')
+            .select('account_status')
+            .eq('id', sessionResult.data.session.user.id)
+            .maybeSingle();
+          if (profileResult.error) throw profileResult.error;
+          if (profileResult.data && profileResult.data.account_status === 'active') {
+            window.location.replace('../Dashboard/Dashboard.html');
+          } else if (profileResult.data) {
+            var accountState = profileResult.data.account_status;
+            signinStatus.textContent = accountState === 'pending'
+              ? 'Your account is pending administrator approval.'
+              : accountState === 'blocked'
+                ? 'Your account is blocked. Contact an administrator.'
+                : 'Your registration was not approved.';
+          }
+        }
+      }).catch(function (error) {
+        console.error('Unable to restore the authentication session.', error);
+        signinStatus.textContent = confirmationCallback
+          ? confirmationSessionVerified
+            ? 'Email confirmed, but the confirmation session could not be cleared. Sign out before signing in again.'
+            : confirmationErrorMessage()
+          : error.message || 'Unable to connect to the authentication service.';
+      });
     })();
   </script>
 </body>
