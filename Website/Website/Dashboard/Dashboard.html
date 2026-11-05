@@ -702,7 +702,7 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16.5 3.5 4 4M4 20l4.3-.9L19.6 7.8a2.1 2.1 0 0 0-3-3L5.3 16.1 4 20Z"></path></svg>
               </button>
               <input type="file" id="profileAvatarInput" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" hidden />
-              <button type="button" class="profile-avatar-remove" id="profileAvatarRemove" onclick="removeProfilePicture()">Remove Profile Picture</button>
+              <button type="button" class="profile-avatar-remove" id="profileAvatarRemove" onclick="removeProfilePicture()">Remove Image</button>
             </div>
 
             <div class="profile-form-area">
@@ -1947,6 +1947,7 @@
       let uploadedPath = null;
       let uploadCompleted = false;
       let profileUpdated = false;
+      let cleanupUploadedAvatar = true;
       try {
         const client = await window.spotibaiSupabaseReady;
         const authUserResult = await client.auth.getUser();
@@ -1980,12 +1981,28 @@
             ? profileUpdate.eq('avatar_path', previousAvatarPath)
             : profileUpdate.is('avatar_path', null);
         }
-        const profileResult = await profileUpdate
+        if (uploadedPath) cleanupUploadedAvatar = false;
+        const { error: updateError } = await profileUpdate;
+        if (updateError) {
+          cleanupUploadedAvatar = true;
+          throw updateError;
+        }
+
+        const { data: refreshedProfileRow, error: refreshedProfileError } = await client.from('profiles')
           .select('id,email,first_name,last_name,phone,role,account_status,permissions,avatar_path')
+          .eq('id', authUser.id)
           .maybeSingle();
-        if (profileResult.error) throw profileResult.error;
-        if (!profileResult.data) {
-          throw new Error('Your profile was not found or could not be updated. Refresh and try again.');
+        if (refreshedProfileError) throw refreshedProfileError;
+        if (!refreshedProfileRow) {
+          throw new Error('No profile record was found for your signed-in account. Refresh and try again.');
+        }
+        if (uploadedPath) cleanupUploadedAvatar = refreshedProfileRow.avatar_path !== uploadedPath;
+        const normalizeProfileValue = value => String(value ?? '').trim();
+        const fieldsNotSaved = Object.entries(updates)
+          .filter(([column, value]) => normalizeProfileValue(refreshedProfileRow[column]) !== normalizeProfileValue(value))
+          .map(([column]) => column === 'avatar_path' ? 'profile picture' : column.replace('_', ' '));
+        if (fieldsNotSaved.length) {
+          throw new Error(`These profile changes were not saved: ${fieldsNotSaved.join(', ')}. Refresh and try again.`);
         }
         profileUpdated = true;
 
@@ -2013,7 +2030,7 @@
           }
         }
 
-        const refreshedProfile = profileFromDatabase(profileResult.data);
+        const refreshedProfile = profileFromDatabase(refreshedProfileRow);
         refreshedProfile.email = verifiedEmail;
         currentUser = {
           ...currentUser,
@@ -2048,7 +2065,7 @@
       } catch (error) {
         console.error('Unable to update the authenticated profile.', error);
         let cleanupMessage = '';
-        if (uploadedPath && uploadCompleted && !profileUpdated) {
+        if (uploadedPath && uploadCompleted && !profileUpdated && cleanupUploadedAvatar) {
           try {
             const client = await window.spotibaiSupabaseReady;
             const { error: cleanupError } = await client.storage.from('avatars').remove([uploadedPath]);
@@ -2156,7 +2173,7 @@
         }
       } finally {
         removeButton.disabled = !currentUser?.avatarPath;
-        removeButton.textContent = 'Remove Profile Picture';
+        removeButton.textContent = 'Remove Image';
         saveButton.disabled = false;
       }
     }
