@@ -1964,37 +1964,81 @@
             throw new Error('The image is too large. Choose an image no larger than 5 MB.');
           }
           uploadedPath = `${authUser.id}/${crypto.randomUUID()}.png`;
+          console.info('Uploading profile picture to Supabase Storage.', {
+            bucket: 'avatars',
+            destinationPath: uploadedPath,
+            contentType: 'image/png',
+            sizeBytes: activeAvatarFile.size
+          });
           const upload = await client.storage.from('avatars').upload(uploadedPath, activeAvatarFile, {
             contentType: 'image/png',
             upsert: false
           });
-          if (upload.error) throw upload.error;
+          if (upload.error) {
+            console.error('Profile picture upload failed.', {
+              bucket: 'avatars',
+              destinationPath: uploadedPath,
+              code: upload.error.error || upload.error.statusCode || upload.error.name,
+              message: upload.error.message,
+              statusCode: upload.error.statusCode
+            });
+            throw upload.error;
+          }
           uploadCompleted = true;
+          console.info('Profile picture upload completed.', {
+            bucket: 'avatars',
+            destinationPath: uploadedPath,
+            returnedPath: upload.data?.path || null
+          });
           updates.avatar_path = uploadedPath;
         }
 
-        let profileUpdate = client.from('profiles')
+        const profileResult = await client.from('profiles')
           .update(updates)
-          .eq('id', authUser.id);
-        if (uploadedPath) {
-          profileUpdate = previousAvatarPath
-            ? profileUpdate.eq('avatar_path', previousAvatarPath)
-            : profileUpdate.is('avatar_path', null);
-        }
-        if (uploadedPath) cleanupUploadedAvatar = false;
-        const { error: updateError } = await profileUpdate;
-        if (updateError) {
-          cleanupUploadedAvatar = true;
-          throw updateError;
+          .eq('id', authUser.id)
+          .select('id,email,first_name,last_name,phone,role,account_status,permissions,avatar_path')
+          .maybeSingle();
+        console.info('Profile update response.', {
+          userId: authUser.id,
+          returnedProfile: profileResult.data
+            ? {
+                id: profileResult.data.id,
+                avatarPath: profileResult.data.avatar_path,
+                updatedFields: Object.keys(updates)
+              }
+            : null,
+          errorCode: profileResult.error?.code || null,
+          errorMessage: profileResult.error?.message || null,
+          errorDetails: profileResult.error?.details || null,
+          errorHint: profileResult.error?.hint || null
+        });
+        if (profileResult.error) throw profileResult.error;
+
+        let refreshedProfileRow = profileResult.data;
+        if (!refreshedProfileRow) {
+          console.error('Profile update returned no row; checking the authenticated profile reference.', {
+            userId: authUser.id,
+            destinationPath: uploadedPath
+          });
+          const fallbackResult = await client.from('profiles')
+            .select('id,email,first_name,last_name,phone,role,account_status,permissions,avatar_path')
+            .eq('id', authUser.id)
+            .maybeSingle();
+          if (fallbackResult.error) {
+            console.error('Unable to verify the profile after an update returned no row.', {
+              code: fallbackResult.error.code,
+              message: fallbackResult.error.message,
+              details: fallbackResult.error.details,
+              hint: fallbackResult.error.hint
+            });
+            throw fallbackResult.error;
+          }
+          refreshedProfileRow = fallbackResult.data;
         }
 
-        const { data: refreshedProfileRow, error: refreshedProfileError } = await client.from('profiles')
-          .select('id,email,first_name,last_name,phone,role,account_status,permissions,avatar_path')
-          .eq('id', authUser.id)
-          .maybeSingle();
-        if (refreshedProfileError) throw refreshedProfileError;
         if (!refreshedProfileRow) {
-          throw new Error('No profile record was found for your signed-in account. Refresh and try again.');
+          cleanupUploadedAvatar = true;
+          throw new Error('No profile record was returned for your signed-in account. The profile update did not return a saved row.');
         }
         if (uploadedPath) cleanupUploadedAvatar = refreshedProfileRow.avatar_path !== uploadedPath;
         const normalizeProfileValue = value => String(value ?? '').trim();
@@ -2002,7 +2046,13 @@
           .filter(([column, value]) => normalizeProfileValue(refreshedProfileRow[column]) !== normalizeProfileValue(value))
           .map(([column]) => column === 'avatar_path' ? 'profile picture' : column.replace('_', ' '));
         if (fieldsNotSaved.length) {
-          throw new Error(`These profile changes were not saved: ${fieldsNotSaved.join(', ')}. Refresh and try again.`);
+          console.error('Profile update did not persist all requested fields.', {
+            userId: authUser.id,
+            destinationPath: uploadedPath,
+            fieldsNotSaved,
+            savedAvatarPath: refreshedProfileRow.avatar_path
+          });
+          throw new Error(`These profile changes were not saved: ${fieldsNotSaved.join(', ')}.`);
         }
         profileUpdated = true;
 
